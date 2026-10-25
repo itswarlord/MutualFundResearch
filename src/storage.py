@@ -332,6 +332,108 @@ def save_fund_ratings(scheme_code: int, category: str, ratings: Dict[str, Any], 
         conn.commit()
 
 
+def generate_fund_summary_lines(f: Dict[str, Any]) -> List[str]:
+    """
+    Generates a concise 5-6 line institutional quantitative narrative summarizing
+    a mutual fund's investment mandate, composite tier ranking, multi-year compounding,
+    risk/CAPM characteristics, alpha/capture ratios, and agency ratings consensus.
+    """
+    name = f.get("scheme_name", "This fund")
+    amc = f.get("amc", "AMC")
+    cat = f.get("category", "Equity")
+    bench = f.get("benchmark_name") or "Nifty 500 TRI"
+    rank = f.get("composite_rank", "-")
+    score = f.get("composite_score", 0)
+    tier = f.get("rating_tier", "Tier 3 - Average")
+
+    cat_stances = {
+        "Large Cap": "investing primarily in top-100 blue-chip market leaders with proven balance sheet stability",
+        "Mid Cap": "targeting high-growth emerging leaders positioned in the 101st-250th market capitalization segment",
+        "Small Cap": "seeking rapid capital appreciation through high-potential companies ranked 251st and beyond",
+        "Flexi Cap": "executing a flexible multi-cap equity mandate dynamically distributed across large, mid, and small cap equities",
+        "Multi Cap": "maintaining a disciplined minimum 25% mandatory allocation across large, mid, and small cap market tiers",
+        "Large & Mid Cap": "balancing established large-cap resilience with high-growth mid-cap opportunities across the top 250 universe",
+        "ELSS": "combining long-term equity wealth generation with tax savings under Section 80C through a 3-year statutory lock-in",
+        "Focused Fund": "concentrating high-conviction capital into a curated portfolio of up to 30 carefully chosen stocks",
+        "Value & Contra": "pursuing deep-value and contrarian opportunities trading at attractive valuations relative to intrinsic potential",
+        "Dividend Yield": "anchoring capital in cash-generative businesses offering robust dividend yields and defensive capital preservation"
+    }
+    stance = cat_stances.get(cat, "providing focused exposure to diversified Indian equities")
+
+    # Line 1: Mandate & Investment Strategy
+    line1 = f"{name} is an open-ended {cat} mutual fund offered by {amc}, benchmarked against the {bench} and {stance}."
+
+    # Line 2: Composite Ranking & Quality Tier
+    line2 = f"Under our multi-agency quantitative framework, the fund ranks #{rank} in the {cat} peer category with a composite score of {score}/100, placing it in {tier}."
+
+    # Line 3: Compounding Track Record & Returns
+    r3y = f"{f.get('return_3y_cagr', 0):.2f}% CAGR" if f.get("return_3y_cagr") is not None else None
+    r1y = f"{f.get('return_1y', 0):.2f}%" if f.get("return_1y") is not None else None
+    r5y = f"{f.get('return_5y_cagr', 0):.2f}% CAGR" if f.get("return_5y_cagr") is not None else None
+    r_inc = f"{f.get('return_inception_cagr', 0):.2f}% CAGR" if f.get("return_inception_cagr") is not None else None
+
+    if r3y:
+        perf_bits = [f"3-year return of {r3y}"]
+        if r1y:
+            perf_bits.append(f"1-year return of {r1y}")
+        if r5y:
+            perf_bits.append(f"5-year CAGR of {r5y}")
+        if r_inc:
+            perf_bits.append(f"since inception: {r_inc}")
+        line3 = f"In terms of historical wealth compounding, the scheme has delivered a {', '.join(perf_bits)}."
+    elif r1y:
+        line3 = f"The scheme has delivered a 1-year trailing return of {r1y} (since inception: {r_inc or 'N/A'}), while longer 3-year rolling horizons are steadily maturing."
+    else:
+        line3 = "As a relatively newly launched or seasoned scheme, full multi-year rolling CAGR track records are maturing over ongoing market cycles."
+
+    # Line 4: Risk, Volatility & Risk-Adjusted Returns
+    vol = f"{f.get('standard_deviation', 0):.2f}%" if f.get("standard_deviation") is not None else None
+    beta = f"{f.get('beta', 0):.2f}" if f.get("beta") is not None else None
+    sharpe = f"{f.get('sharpe_ratio', 0):.2f}" if f.get("sharpe_ratio") is not None else None
+    sortino = f"{f.get('sortino_ratio', 0):.2f}" if f.get("sortino_ratio") is not None else None
+
+    if vol and beta:
+        line4 = f"From a risk perspective, it displays an annualized volatility of {vol} and a market Beta of {beta}, resulting in a Sharpe Ratio of {sharpe or 'N/A'} and Sortino Ratio of {sortino or 'N/A'}."
+    elif vol:
+        line4 = f"From a risk perspective, the fund demonstrates an annualized volatility of {vol}, with full CAPM market sensitivity metrics establishing over time."
+    else:
+        line4 = "Statistical risk parameters and annualized volatility are calibrating as the fund builds its historical trading series against the category benchmark."
+
+    # Line 5: Alpha Generation & Market Capture Ratios
+    alpha = f"{f.get('alpha', 0):+.2f}%" if f.get("alpha") is not None else None
+    up = f"{round(f.get('upside_capture', 0))}%" if f.get("upside_capture") is not None else None
+    dn = f"{round(f.get('downside_capture', 0))}%" if f.get("downside_capture") is not None else None
+    cap = f"{f.get('capture_ratio', 0):.2f}" if f.get("capture_ratio") is not None else None
+
+    if alpha and up and dn:
+        line5 = f"Relative to its benchmark, the fund generates a Jensen's Alpha of {alpha}, accompanied by an upside capture of {up} and downside capture of {dn} (overall capture ratio: {cap or 'N/A'})."
+    elif alpha:
+        line5 = f"Relative to its designated benchmark, the fund reflects a Jensen's Alpha of {alpha}, highlighting its active portfolio selection capability."
+    else:
+        line5 = "Active benchmark alpha and dual-market capture ratios (upside/downside) will compute once mandatory 36-month daily return histories conclude."
+
+    # Line 6: Agency Accolades & Expense Efficiency
+    ms = f"{f.get('morningstar_rating')}★" if f.get("morningstar_rating") else "Unrated"
+    if f.get("morningstar_medalist"):
+        ms += f" ({f.get('morningstar_medalist')})"
+    vr = f"{f.get('valueresearch_rating')}★" if f.get("valueresearch_rating") else "Unrated"
+    if f.get("valueresearch_risk_grade"):
+        vr += f" [{f.get('valueresearch_risk_grade')} Risk]"
+    cr = f.get("crisil_rank") or "Unranked"
+    of = f"{f.get('one_finance_score')}/100" if f.get("one_finance_score") else "N/A"
+    ter = f"{f.get('direct_ter', 0):.2f}%" if f.get("direct_ter") is not None else "N/A"
+    aum = f"₹{round(f.get('aum_cr', 0)):,} Cr" if f.get("aum_cr") else "N/A"
+
+    line6 = f"Across independent rating agencies, it is assigned {ms} from Morningstar, {vr} from Value Research, {cr} from CRISIL, and a {of} score from 1 Finance, managing {aum} in AUM with a Direct TER of {ter}."
+
+    return [line1, line2, line3, line4, line5, line6]
+
+
+def generate_fund_summary_text(f: Dict[str, Any]) -> str:
+    """Returns the 5-6 line summary as a newline-delimited text block."""
+    return "\n".join(generate_fund_summary_lines(f))
+
+
 def export_all_equity_data(db_path: str = DB_PATH):
     """
     Exports:
@@ -476,6 +578,12 @@ def export_all_equity_data(db_path: str = DB_PATH):
                 "benchmark": b_info["description"],
                 "benchmark_proxy": b_info["name"]
             })
+
+        # Attach 5-6 line quantitative summary to each mutual fund for detail modal
+        for f in all_data:
+            s_lines = generate_fund_summary_lines(f)
+            f["summary_lines"] = s_lines
+            f["summary"] = "\n".join(s_lines)
 
         web_payload = {
             "updated_at": datetime.date.today().isoformat(),

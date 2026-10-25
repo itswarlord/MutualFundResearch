@@ -131,9 +131,6 @@
           <button id="btn-toggle-scatter" class="action-btn toggle-btn">
             📈 Toggle Risk-Return Chart
           </button>
-          <a href="#" id="btn-download-cat-csv" class="action-btn download-btn">
-            📥 Download CSV
-          </a>
         </div>
       </div>
     </div>
@@ -188,7 +185,7 @@
             <option value="sharpe_desc">Sharpe Ratio (Highest first)</option>
             <option value="volatility_asc">Volatility (Lowest risk first)</option>
             <option value="aum_desc">AUM (Largest first)</option>
-            <option value="ter_asc">Expense Ratio (Lowest TER)</option>
+            <option value="ter_asc">Direct TER (Lowest first)</option>
           </select>
         </div>
 
@@ -211,7 +208,7 @@
               <th class="col-returns">Returns (1Y • 3Y • 5Y CAGR)</th>
               <th class="col-risk">Risk & CAPM (Beta • Alpha • Sharpe)</th>
               <th class="col-capture">Capture Ratio</th>
-              <th class="col-ter">Expense (TER)</th>
+              <th class="col-ter">Direct TER</th>
               <th class="col-action">Details</th>
             </tr>
           </thead>
@@ -325,7 +322,6 @@
         </p>
       </div>
       <div class="footer-right">
-        <a href="data/all_equity_summary.csv" class="footer-link" download="all_equity_summary.csv">Download Master CSV</a>
         <a href="#main-navbar" class="footer-link">Back to Top ↑</a>
       </div>
     </div>

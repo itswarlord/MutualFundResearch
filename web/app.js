@@ -279,13 +279,6 @@ function updateCategoryBanner() {
   document.getElementById("cat-banner-desc").textContent = desc;
   document.getElementById("cat-benchmark-val").textContent = bInfo.name;
   document.getElementById("cat-benchmark-proxy").textContent = bInfo.proxy;
-
-  // Update Category CSV Download link
-  const dlBtn = document.getElementById("btn-download-cat-csv");
-  const slug = state.activeCategory.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-  dlBtn.href = `data/${slug}_summary.csv`;
-  dlBtn.download = `${slug}_summary.csv`;
-  dlBtn.textContent = `📥 Download ${state.activeCategory} CSV`;
 }
 
 // Filter and Sort Funds
@@ -403,9 +396,8 @@ function renderTable() {
       const capRatio = fund.capture_ratio !== null && fund.capture_ratio !== undefined ? fund.capture_ratio.toFixed(2) : "N/A";
       const upDown = `${fund.upside_capture ? Math.round(fund.upside_capture) : "-"} / ${fund.downside_capture ? Math.round(fund.downside_capture) : "-"}`;
 
-      // TER
+      // Direct TER
       const dirTer = fund.direct_ter !== null ? `${fund.direct_ter.toFixed(2)}%` : "N/A";
-      const regTer = fund.regular_ter !== null ? `${fund.regular_ter.toFixed(2)}%` : "";
 
       return `
         <tr data-scheme-code="${fund.scheme_code}" onclick="openFundDrawer(${fund.scheme_code})">
@@ -463,7 +455,6 @@ function renderTable() {
           </td>
           <td class="col-ter">
             <div class="ter-direct">${dirTer}</div>
-            ${regTer ? `<div class="ter-regular">${regTer}</div>` : ""}
           </td>
           <td class="col-action" onclick="event.stopPropagation();">
             <button class="btn-details" onclick="openFundDrawer(${fund.scheme_code})">Inspect</button>
@@ -472,6 +463,38 @@ function renderTable() {
       `;
     })
     .join("");
+}
+
+// Get 5-6 Line Mutual Fund Summary
+function getFundSummaryLines(fund) {
+  if (Array.isArray(fund.summary_lines) && fund.summary_lines.length >= 5) {
+    return fund.summary_lines;
+  }
+  if (fund.summary) {
+    return fund.summary.split("\n").filter((l) => l.trim().length > 0);
+  }
+  const name = fund.scheme_name || "This fund";
+  const cat = fund.category || "Equity";
+  const bench = fund.benchmark_name || "NIFTY 500 TRI";
+  const rank = fund.composite_rank ? `#${fund.composite_rank}` : "-";
+  const score = fund.composite_score ? `${fund.composite_score.toFixed(1)}/100` : "N/A";
+  const tier = fund.rating_tier || "Unrated";
+  const ret3y = fund.return_3y_cagr !== null ? `${fund.return_3y_cagr.toFixed(2)}% CAGR` : "maturing";
+  const ret1y = fund.return_1y !== null ? `${fund.return_1y.toFixed(2)}%` : "N/A";
+  const vol = fund.standard_deviation !== null ? `${fund.standard_deviation.toFixed(2)}%` : "N/A";
+  const beta = fund.beta !== null ? fund.beta.toFixed(2) : "N/A";
+  const alpha = fund.alpha !== null ? `${fund.alpha >= 0 ? "+" : ""}${fund.alpha.toFixed(2)}%` : "N/A";
+  const ter = fund.direct_ter !== null ? `${fund.direct_ter.toFixed(2)}%` : "N/A";
+  const aum = fund.aum_cr ? `₹${Math.round(fund.aum_cr).toLocaleString()} Cr` : "N/A";
+
+  return [
+    `${name} is an open-ended ${cat} mutual fund offered by ${fund.amc || "AMC"}, benchmarked against ${bench}.`,
+    `Under our multi-agency quantitative framework, the fund ranks ${rank} in the ${cat} peer group with a score of ${score} (${tier}).`,
+    `In historical compounding, the fund recorded a 3-year return of ${ret3y} and 1-year return of ${ret1y}.`,
+    `From a risk perspective, it displays an annualized volatility of ${vol} and market Beta of ${beta}.`,
+    `Relative to ${bench}, the fund delivers a Jensen's Alpha of ${alpha} with capture ratio ${fund.capture_ratio || "N/A"}.`,
+    `Assigned independent agency coverage, managing ${aum} in AUM with a Direct TER of ${ter}.`
+  ];
 }
 
 // Open Fund Detail Slide-over Drawer
@@ -493,6 +516,19 @@ function openFundDrawer(schemeCode) {
   const crRank = fund.crisil_rank || "Unranked";
   const ofScore = fund.one_finance_score ? `${fund.one_finance_score}/100` : "N/A";
   const advQ = fund.advisorkhoj_quartile || "N/A";
+
+  // Fund Executive Summary (5-6 Lines)
+  const summaryLines = getFundSummaryLines(fund);
+  const summaryHtml = summaryLines
+    .map(
+      (line, idx) => `
+      <div class="summary-line-item">
+        <span class="summary-line-num">${idx + 1}</span>
+        <div class="summary-line-text">${escapeHtml(line)}</div>
+      </div>
+    `
+    )
+    .join("");
 
   // Returns Progress bars
   const intervals = [
@@ -526,6 +562,17 @@ function openFundDrawer(schemeCode) {
     .join("");
 
   content.innerHTML = `
+    <!-- Fund Executive Summary Card (5-6 Lines) -->
+    <div class="drawer-card fund-summary-card">
+      <div class="drawer-card-title">
+        <span>Fund Executive Summary</span>
+        <span class="summary-badge">${summaryLines.length} Core Insights</span>
+      </div>
+      <div class="fund-summary-body">
+        ${summaryHtml}
+      </div>
+    </div>
+
     <!-- Key Statistics Grid -->
     <div class="drawer-card">
       <div class="drawer-card-title">Portfolio & NAV Overview</div>
@@ -646,25 +693,21 @@ function openFundDrawer(schemeCode) {
       </div>
     </div>
 
-    <!-- TER Fee Comparison -->
+    <!-- Direct Plan Expense Ratio (TER) -->
     <div class="drawer-card">
-      <div class="drawer-card-title">Expense Ratio Savings (Direct vs Regular)</div>
+      <div class="drawer-card-title">Direct Plan Expense Ratio (TER)</div>
       <div class="drawer-stats-row">
         <div class="d-stat-box">
           <div class="d-stat-label">Direct TER</div>
           <div class="d-stat-val" style="color: var(--accent-emerald);">${fund.direct_ter !== null ? fund.direct_ter.toFixed(2) + "%" : "N/A"}</div>
         </div>
         <div class="d-stat-box">
-          <div class="d-stat-label">Regular TER</div>
-          <div class="d-stat-val" style="color: var(--text-dim); text-decoration: line-through;">
-            ${fund.regular_ter !== null ? fund.regular_ter.toFixed(2) + "%" : "N/A"}
-          </div>
+          <div class="d-stat-label">Fund Scale (AUM)</div>
+          <div class="d-stat-val">${fund.aum_cr ? "₹" + Math.round(fund.aum_cr).toLocaleString() + " Cr" : "N/A"}</div>
         </div>
         <div class="d-stat-box">
-          <div class="d-stat-label">Annual Savings</div>
-          <div class="d-stat-val" style="color: #38bdf8;">
-            ${fund.direct_ter && fund.regular_ter ? (fund.regular_ter - fund.direct_ter).toFixed(2) + "%" : "N/A"}
-          </div>
+          <div class="d-stat-label">Plan Option</div>
+          <div class="d-stat-val" style="color: #38bdf8; font-size: 13px; font-weight: 600;">Direct - Growth</div>
         </div>
       </div>
     </div>

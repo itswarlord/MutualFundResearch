@@ -39,7 +39,15 @@ from ratings import (
     match_scheme_to_crisil,
     fetch_crisil_rankings,
 )
-from storage import get_connection, init_db, save_fund_ratings, DB_PATH, MASTER_EXCEL_PATH
+from storage import (
+    get_connection,
+    init_db,
+    save_fund_ratings,
+    DB_PATH,
+    MASTER_EXCEL_PATH,
+    generate_fund_summary_lines,
+    generate_fund_summary_text,
+)
 
 
 class TestValueResearchPdfParser(unittest.TestCase):
@@ -434,6 +442,242 @@ class TestWebAppUIChanges(unittest.TestCase):
         self.assertNotIn('<option value="All Equity Funds">', self.html, "'All Equity Funds' option must be removed from dropdown HTML")
         self.assertNotIn('allOpt.value = "All Equity Funds"', self.js, "'All Equity Funds' must not be added to dropdown in app.js")
         self.assertNotIn('selectCategory("All Equity Funds")', self.js, "'All Equity Funds' must not be added as a category tab in app.js")
+
+
+class TestFundExecutiveSummaries(unittest.TestCase):
+    """Verifies that 5-6 line quantitative executive summaries are correctly generated
+    and populated for all funds across all 10 equity categories."""
+
+    def setUp(self):
+        self.funds_json_path = os.path.join(WEB_DIR, "data", "funds.json")
+        with open(self.funds_json_path, "r", encoding="utf-8") as f:
+            self.funds_data = json.load(f)
+
+    def test_summary_generation_function_complete_profile(self):
+        """Verifies 5-6 line summary generation with complete metrics."""
+        fund = {
+            "scheme_name": "Parag Parikh Flexi Cap Fund",
+            "amc": "PPFAS Mutual Fund",
+            "category": "Flexi Cap",
+            "benchmark_name": "NIFTY 500 TRI",
+            "composite_rank": 1,
+            "composite_score": 92.4,
+            "rating_tier": "BEST (Tier 1 - Elite)",
+            "return_1y": 28.5,
+            "return_3y_cagr": 21.4,
+            "return_5y_cagr": 23.1,
+            "return_inception_cagr": 19.8,
+            "standard_deviation": 11.2,
+            "beta": 0.74,
+            "sharpe_ratio": 1.25,
+            "sortino_ratio": 1.88,
+            "alpha": 6.85,
+            "upside_capture": 94.2,
+            "downside_capture": 68.5,
+            "capture_ratio": 1.38,
+            "morningstar_rating": 5,
+            "morningstar_medalist": "Gold",
+            "valueresearch_rating": 5,
+            "valueresearch_risk_grade": "Low",
+            "crisil_rank": "Rank 1",
+            "one_finance_score": 88,
+            "direct_ter": 0.62,
+            "regular_ter": 1.45,
+            "aum_cr": 72450.0,
+        }
+        lines = generate_fund_summary_lines(fund)
+        self.assertEqual(len(lines), 6, "Must generate exactly 6 summary lines")
+
+        # Line 1: Mandate & Investment Strategy
+        self.assertIn("Parag Parikh Flexi Cap Fund", lines[0])
+        self.assertIn("PPFAS Mutual Fund", lines[0])
+        self.assertIn("NIFTY 500 TRI", lines[0])
+
+        # Line 2: Composite Ranking & Quality Tier
+        self.assertIn("#1", lines[1])
+        self.assertIn("92.4/100", lines[1])
+        self.assertIn("BEST (Tier 1 - Elite)", lines[1])
+
+        # Line 3: Compounding Track Record & Returns
+        self.assertIn("21.40% CAGR", lines[2])
+        self.assertIn("28.50%", lines[2])
+
+        # Line 4: Risk, Volatility & Risk-Adjusted Returns
+        self.assertIn("11.20%", lines[3])
+        self.assertIn("0.74", lines[3])
+        self.assertIn("1.25", lines[3])
+
+        # Line 5: Alpha Generation & Market Capture Ratios
+        self.assertIn("+6.85%", lines[4])
+        self.assertIn("1.38", lines[4])
+
+        # Line 6: Agency Accolades & Direct TER
+        self.assertIn("Direct TER of 0.62%", lines[5])
+        self.assertIn("72,450 Cr", lines[5])
+
+        # User requirement check: No regular TER or savings in summary
+        summary_text = "\n".join(lines)
+        self.assertNotIn("regular_ter", summary_text.lower())
+        self.assertNotIn("regular ter", summary_text.lower())
+        self.assertNotIn("annual savings", summary_text.lower())
+        self.assertNotIn("savings about expenses", summary_text.lower())
+
+    def test_summary_text_generator(self):
+        """Verifies generate_fund_summary_text returns newline-joined 6 lines."""
+        fund = {
+            "scheme_name": "Test Bluechip Fund",
+            "amc": "Test AMC",
+            "category": "Large Cap",
+            "benchmark_name": "NIFTY 100 TRI",
+            "composite_rank": 5,
+            "composite_score": 75.0,
+            "rating_tier": "Tier 2 - Superior",
+            "direct_ter": 0.85,
+            "aum_cr": 15000.0,
+        }
+        text = generate_fund_summary_text(fund)
+        lines = text.split("\n")
+        self.assertEqual(len(lines), 6)
+        self.assertTrue(all(len(l.strip()) > 10 for l in lines))
+
+    def test_all_funds_in_funds_json_have_valid_summaries(self):
+        """Verifies every fund in web/data/funds.json has 5-6 lines of valid summary."""
+        funds = self.funds_data["funds"]
+        self.assertGreaterEqual(len(funds), 300)
+
+        for fund in funds:
+            name = fund.get("scheme_name", "Unknown")
+            summary_lines = fund.get("summary_lines")
+            self.assertIsNotNone(summary_lines, f"Missing summary_lines for {name}")
+            self.assertIsInstance(summary_lines, list, f"summary_lines should be a list for {name}")
+            self.assertIn(len(summary_lines), [5, 6], f"Summary lines should be 5-6 for {name}")
+
+            # Each line must be substantial
+            for idx, line in enumerate(summary_lines):
+                self.assertGreater(len(line.strip()), 20, f"Line {idx+1} too short for {name}")
+
+            # Combined summary
+            summary = fund.get("summary")
+            self.assertIsNotNone(summary, f"Missing summary for {name}")
+            self.assertEqual(summary, "\n".join(summary_lines))
+
+            # Must NOT contain regular expenses or expense savings
+            self.assertNotIn("regular ter", summary.lower())
+            self.assertNotIn("annual savings", summary.lower())
+            self.assertNotIn("fee savings", summary.lower())
+
+    def test_all_10_categories_have_complete_summaries(self):
+        """Verifies all 10 SEBI categories are represented and 100% summarized."""
+        funds = self.funds_data["funds"]
+        categories = set(f["category"] for f in funds)
+        expected_categories = {
+            "Large Cap",
+            "Mid Cap",
+            "Small Cap",
+            "Flexi Cap",
+            "Multi Cap",
+            "Large & Mid Cap",
+            "ELSS",
+            "Focused Fund",
+            "Value & Contra",
+            "Dividend Yield",
+        }
+        self.assertEqual(categories, expected_categories)
+
+        for cat in expected_categories:
+            cat_funds = [f for f in funds if f["category"] == cat]
+            self.assertGreaterEqual(len(cat_funds), 10, f"Category {cat} should have at least 10 funds")
+            for f in cat_funds:
+                self.assertEqual(len(f.get("summary_lines", [])), 6)
+
+
+class TestWebUICleanupAndTER(unittest.TestCase):
+    """Verifies that all CSV links and regular expenses/savings are removed from the website,
+    and only Direct TER is displayed along with the fund executive summary."""
+
+    def setUp(self):
+        with open(os.path.join(WEB_DIR, "index.html"), "r", encoding="utf-8") as f:
+            self.html = f.read()
+        with open(os.path.join(WEB_DIR, "app.js"), "r", encoding="utf-8") as f:
+            self.js = f.read()
+        with open(os.path.join(WEB_DIR, "style.css"), "r", encoding="utf-8") as f:
+            self.css = f.read()
+
+    def test_no_csv_links_in_index_html(self):
+        """Verifies no CSV download buttons or links remain in index.html."""
+        self.assertNotIn("btn-download-cat-csv", self.html)
+        self.assertNotIn(".csv", self.html)
+        self.assertNotIn("download=", self.html)
+        self.assertNotIn("download master csv", self.html.lower())
+
+    def test_no_csv_download_in_app_js(self):
+        """Verifies app.js does not reference CSV download buttons or CSV files."""
+        self.assertNotIn("btn-download-cat-csv", self.js)
+        self.assertNotIn("_summary.csv", self.js)
+
+    def test_table_header_shows_direct_ter(self):
+        """Verifies table header shows 'Direct TER' and sort option references Direct TER."""
+        self.assertIn('<th class="col-ter">Direct TER</th>', self.html)
+        self.assertIn("Direct TER (Lowest first)", self.html)
+
+    def test_table_row_renders_only_direct_ter(self):
+        """Verifies table rows in app.js do not render regular TER."""
+        self.assertNotIn('<div class="ter-regular">', self.js)
+        self.assertIn('<div class="ter-direct">${dirTer}</div>', self.js)
+
+    def test_fund_drawer_shows_summary_and_direct_ter_only(self):
+        """Verifies fund drawer displays the 5-6 line summary and only Direct TER (no savings)."""
+        # Summary Card in drawer
+        self.assertIn("getFundSummaryLines", self.js)
+        self.assertIn("fund-summary-card", self.js)
+        self.assertIn("Fund Executive Summary", self.js)
+        self.assertIn("summary-line-item", self.js)
+        self.assertIn("summary-line-num", self.js)
+        self.assertIn("summary-line-text", self.js)
+
+        # No regular TER or savings in drawer
+        self.assertNotIn("Expense Ratio Savings", self.js)
+        self.assertNotIn("Regular TER", self.js)
+        self.assertNotIn("Annual Savings", self.js)
+        self.assertIn("Direct Plan Expense Ratio (TER)", self.js)
+
+    def test_fund_summary_styles_in_css(self):
+        """Verifies CSS contains styling for the executive summary card and items."""
+        self.assertIn(".fund-summary-card", self.css)
+        self.assertIn(".summary-badge", self.css)
+        self.assertIn(".fund-summary-body", self.css)
+        self.assertIn(".summary-line-item", self.css)
+        self.assertIn(".summary-line-num", self.css)
+        self.assertIn(".summary-line-text", self.css)
+        self.assertIn('[data-theme="light"] .fund-summary-card', self.css)
+        self.assertIn('[data-theme="light"] .summary-line-item', self.css)
+
+
+class TestCategoryBenchmarkAlignment(unittest.TestCase):
+    """Verifies that all 10 equity categories have designated SEBI Tier 1 benchmarks
+    consistently across backend and frontend configurations."""
+
+    def setUp(self):
+        with open(os.path.join(WEB_DIR, "app.js"), "r", encoding="utf-8") as f:
+            self.js = f.read()
+
+    def test_benchmark_details_cover_all_categories(self):
+        """Verifies BENCHMARK_DETAILS dictionary in app.js maps all 10 categories."""
+        categories = [
+            "Large Cap",
+            "Mid Cap",
+            "Small Cap",
+            "Flexi Cap",
+            "Multi Cap",
+            "Large & Mid Cap",
+            "ELSS",
+            "Focused Fund",
+            "Value & Contra",
+            "Dividend Yield",
+        ]
+        for cat in categories:
+            self.assertIn(f'"{cat}":', self.js)
+            self.assertIn("TRI", self.js)
 
 
 if __name__ == "__main__":
