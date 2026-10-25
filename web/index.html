@@ -12,6 +12,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   
   <link rel="stylesheet" href="style.css">
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem("mf_theme");
+      if (savedTheme === "light" || (!savedTheme && window.matchMedia("(prefers-color-scheme: light)").matches)) {
+        document.documentElement.setAttribute("data-theme", "light");
+      } else {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    })();
+  </script>
 </head>
 <body>
 
@@ -26,15 +36,15 @@
         </div>
       </div>
       <div class="nav-actions">
-        <button id="btn-hosting-eval" class="nav-btn secondary-btn" title="View Online Hosting Evaluation">
-          🌐 Online Hosting Guide
+        <!-- Day/Night Mode Switch -->
+        <button id="theme-toggle-btn" class="theme-toggle-btn" aria-label="Toggle Day/Night Mode" title="Toggle Day/Night Mode">
+          <span class="theme-icon theme-sun" aria-hidden="true">☀️</span>
+          <span class="theme-icon theme-moon" aria-hidden="true">🌙</span>
+          <span class="theme-label" id="theme-label">Light Mode</span>
         </button>
         <button id="btn-methodology" class="nav-btn secondary-btn" title="View Rating & CAPM Methodology">
           📐 Methodology
         </button>
-        <a href="data/Indian_Equity_Mutual_Funds_Master.xlsx" id="btn-download-master-excel" class="nav-btn primary-btn" download="Indian_Equity_Mutual_Funds_Master.xlsx">
-          <span class="btn-icon">📊</span> Download Master Excel (.xlsx)
-        </a>
       </div>
     </div>
   </header>
@@ -84,7 +94,16 @@
     <!-- Category Tabs Navigation -->
     <div class="category-tabs-wrapper">
       <div class="category-tabs-header">
-        <span class="tabs-label">Select Equity Category:</span>
+        <div class="tabs-header-left">
+          <span class="tabs-label">Select Equity Category:</span>
+          <!-- Alternate Category Selection Dropdown -->
+          <div class="category-select-wrapper" title="Alternate quick category switcher">
+            <span class="category-select-icon" aria-hidden="true">🏷️</span>
+            <select id="category-dropdown-select" class="category-dropdown-select" aria-label="Select Equity Category">
+              <option value="All Equity Funds">All Equity Funds</option>
+            </select>
+          </div>
+        </div>
         <div class="benchmark-info-badge" id="active-benchmark-badge">
           <span class="benchmark-tag">BENCHMARK</span>
           <span class="benchmark-name" id="benchmark-display-name">NIFTY 500 TRI</span>
@@ -229,91 +248,7 @@
     </div>
   </aside>
 
-  <!-- Modal: Online Hosting Evaluation -->
-  <div class="modal-backdrop" id="modal-hosting">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="modal-title-group">
-          <span class="modal-icon">🌐</span>
-          <h2 class="modal-title">Where Can This Research Platform Be Hosted Online?</h2>
-        </div>
-        <button class="modal-close-btn" id="modal-hosting-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-intro">
-          This platform is designed as an ultra-fast, zero-dependency static application powered by pre-compiled daily SQLite analytics. Here is a complete architectural evaluation of the best hosting environments:
-        </p>
 
-        <div class="hosting-grid">
-          <!-- Option 1: GitHub Pages -->
-          <div class="hosting-card featured">
-            <div class="hosting-badge">TOP RECOMMENDATION (100% FREE)</div>
-            <h3>1. GitHub Pages + GitHub Actions</h3>
-            <div class="hosting-spec">
-              <span>Cost: <strong>$0 / month</strong></span> • 
-              <span>Type: <strong>Global CDN</strong></span> • 
-              <span>Automation: <strong>Built-in Cron</strong></span>
-            </div>
-            <p>
-              The existing repository already has an automated workflow at <code>.github/workflows/daily_update.yml</code> that runs every weekday at 18:00 UTC (23:30 IST).
-            </p>
-            <ul>
-              <li><strong>Zero Server Maintenance:</strong> GitHub automatically hosts the static <code>web/</code> files at <code>https://&lt;username&gt;.github.io/MututalFundResearch/</code>.</li>
-              <li><strong>Automated Daily Refresh:</strong> The GitHub Action fetches AMFI daily NAVs, runs the calculations, writes the updated <code>web/data/funds.json</code> and Excel workbook, and commits back to the repo.</li>
-              <li><strong>Custom Domains & HTTPS:</strong> Supports free SSL and custom domain mapping (e.g., <code>research.yourdomain.com</code>).</li>
-            </ul>
-            <div class="hosting-step-box">
-              <strong>Quick Deployment Command:</strong><br>
-              <code>git push origin main</code> & enable <em>GitHub Pages</em> under Repo Settings &gt; Pages &gt; Source: <code>main</code> / <code>web/</code>.
-            </div>
-          </div>
-
-          <!-- Option 2: Cloudflare Pages -->
-          <div class="hosting-card">
-            <div class="hosting-badge-alt">FASTEST GLOBAL EDGE</div>
-            <h3>2. Cloudflare Pages</h3>
-            <div class="hosting-spec">
-              <span>Cost: <strong>Free Tier</strong></span> • 
-              <span>Speed: <strong>Sub-20ms Edge</strong></span> • 
-              <span>Bandwidth: <strong>Unlimited</strong></span>
-            </div>
-            <p>
-              Connect your GitHub repository to Cloudflare Pages with build directory set to <code>web</code>. Every time GitHub Actions commits new daily NAV data, Cloudflare deploys the changes globally across 300+ edge data centers in seconds.
-            </p>
-          </div>
-
-          <!-- Option 3: Vercel / Netlify -->
-          <div class="hosting-card">
-            <div class="hosting-badge-alt">EASIEST DEV EXPERIENCE</div>
-            <h3>3. Vercel or Netlify</h3>
-            <div class="hosting-spec">
-              <span>Cost: <strong>Free Tier</strong></span> • 
-              <span>Features: <strong>Preview Branches</strong></span>
-            </div>
-            <p>
-              Simply import the repository or drag-and-drop the <code>web/</code> directory. Instant deployment with automatic SSL, Brotli compression, and immutable cache invalidation.
-            </p>
-          </div>
-
-          <!-- Option 4: Full Backend Server (Render / Railway / VPS) -->
-          <div class="hosting-card">
-            <div class="hosting-badge-alt">DYNAMIC PYTHON BACKEND</div>
-            <h3>4. Render, Railway, or Linux VPS</h3>
-            <div class="hosting-spec">
-              <span>Cost: <strong>$0–$7 / month</strong></span> • 
-              <span>Type: <strong>Dedicated Python Service</strong></span>
-            </div>
-            <p>
-              If you want live on-demand calculation APIs or user accounts, you can run <code>python3 web/server.py</code> directly on a Render Web Service or $5/month Hetzner/DigitalOcean VPS with systemd and Caddy/Nginx reverse proxy.
-            </p>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="nav-btn primary-btn" id="modal-hosting-ack">Close Guide</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Modal: Methodology & Formulas -->
   <div class="modal-backdrop" id="modal-methodology">
@@ -391,7 +326,6 @@
         </p>
       </div>
       <div class="footer-right">
-        <a href="data/Indian_Equity_Mutual_Funds_Master.xlsx" class="footer-link" download="Indian_Equity_Mutual_Funds_Master.xlsx">Download Master Excel (.xlsx)</a>
         <a href="data/all_equity_summary.csv" class="footer-link" download="all_equity_summary.csv">Download Master CSV</a>
         <a href="#main-navbar" class="footer-link">Back to Top ↑</a>
       </div>

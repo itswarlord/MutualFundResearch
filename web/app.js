@@ -107,8 +107,18 @@ function setupEventListeners() {
     }
   });
 
-  // Modals Setup
-  setupModal("btn-hosting-eval", "modal-hosting", "modal-hosting-close", "modal-hosting-ack");
+  // Day / Night Theme Mode Setup
+  initTheme();
+
+  // Alternate Category Selection Dropdown
+  const catDropdown = document.getElementById("category-dropdown-select");
+  if (catDropdown) {
+    catDropdown.addEventListener("change", (e) => {
+      selectCategory(e.target.value);
+    });
+  }
+
+  // Methodology Modal Setup
   setupModal("btn-methodology", "modal-methodology", "modal-methodology-close", "modal-methodology-ack");
 
   // Drawer Close
@@ -151,6 +161,34 @@ function setupModal(openBtnId, modalId, closeBtnId, ackBtnId) {
   }
 }
 
+// Day / Night Mode Switcher
+function initTheme() {
+  const themeBtn = document.getElementById("theme-toggle-btn");
+  const themeLabel = document.getElementById("theme-label");
+  if (!themeBtn) return;
+
+  function updateThemeUI(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("mf_theme", theme);
+    if (themeLabel) {
+      themeLabel.textContent = theme === "light" ? "Dark Mode" : "Light Mode";
+    }
+    themeBtn.setAttribute("title", theme === "light" ? "Switch to Dark Mode (Night)" : "Switch to Light Mode (Day)");
+    if (state.showChart) {
+      drawRiskReturnChart();
+    }
+  }
+
+  const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
+  updateThemeUI(currentTheme);
+
+  themeBtn.addEventListener("click", () => {
+    const active = document.documentElement.getAttribute("data-theme") || "dark";
+    const next = active === "light" ? "dark" : "light";
+    updateThemeUI(next);
+  });
+}
+
 // Load Funds Data from JSON
 async function loadFundsData() {
   try {
@@ -181,10 +219,28 @@ async function loadFundsData() {
   }
 }
 
-// Render Category Navigation Tabs
+// Render Category Navigation Tabs & Alternate Dropdown
 function renderCategoryTabs() {
   const container = document.getElementById("category-tabs-container");
   container.innerHTML = "";
+
+  // Synchronize Alternate Category Dropdown
+  const dropdown = document.getElementById("category-dropdown-select");
+  if (dropdown) {
+    dropdown.innerHTML = "";
+    const allOpt = document.createElement("option");
+    allOpt.value = "All Equity Funds";
+    allOpt.textContent = `All Equity Funds (${state.rawFunds.length} schemes)`;
+    dropdown.appendChild(allOpt);
+
+    state.categories.forEach((cat) => {
+      const opt = document.createElement("option");
+      opt.value = cat.name;
+      opt.textContent = `${cat.name} (${cat.count} schemes)`;
+      dropdown.appendChild(opt);
+    });
+    dropdown.value = state.activeCategory;
+  }
 
   // 1. "All Equity Funds" tab
   const allTab = document.createElement("button");
@@ -206,7 +262,21 @@ function renderCategoryTabs() {
 // Category Switcher
 function selectCategory(categoryName) {
   state.activeCategory = categoryName;
+
+  // Sync Alternate Dropdown if needed
+  const dropdown = document.getElementById("category-dropdown-select");
+  if (dropdown && dropdown.value !== categoryName) {
+    dropdown.value = categoryName;
+  }
+
   renderCategoryTabs();
+
+  // Smoothly center the active pill tab in horizontal scroll
+  const activeTab = document.querySelector(".cat-tab-btn.active");
+  if (activeTab) {
+    activeTab.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }
+
   updateCategoryBanner();
   renderTable();
   if (state.showChart) drawRiskReturnChart();
@@ -682,10 +752,13 @@ function drawRiskReturnChart() {
   const plotW = width - padding.left - padding.right;
   const plotH = height - padding.top - padding.bottom;
 
+  // Theme-aware colors
+  const isLight = document.documentElement.getAttribute("data-theme") === "light";
+
   // Draw Grid lines
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+  ctx.strokeStyle = isLight ? "rgba(15, 23, 42, 0.08)" : "rgba(255, 255, 255, 0.06)";
   ctx.lineWidth = 1;
-  ctx.fillStyle = "#64748b";
+  ctx.fillStyle = isLight ? "#475569" : "#64748b";
   ctx.font = "11px JetBrains Mono";
   ctx.textAlign = "right";
 
@@ -715,7 +788,7 @@ function drawRiskReturnChart() {
   }
 
   // Axis Labels
-  ctx.fillStyle = "#94a3b8";
+  ctx.fillStyle = isLight ? "#1e293b" : "#94a3b8";
   ctx.font = "12px Plus Jakarta Sans";
   ctx.textAlign = "center";
   ctx.fillText("Annualized Volatility / Standard Deviation (σ)", padding.left + plotW / 2, height - 10);

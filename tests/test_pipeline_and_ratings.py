@@ -338,6 +338,47 @@ class TestWebServerEndpoints(unittest.TestCase):
             self.assertIn("text/csv", resp.headers.get("Content-Type", ""))
 
 
+class TestWebAppUIChanges(unittest.TestCase):
+    """Tests the UI changes requested: theme toggle, category dropdown, sticky header, removed items."""
+
+    def setUp(self):
+        with open(os.path.join(WEB_DIR, "index.html"), "r", encoding="utf-8") as f:
+            self.html = f.read()
+        with open(os.path.join(WEB_DIR, "style.css"), "r", encoding="utf-8") as f:
+            self.css = f.read()
+        with open(os.path.join(WEB_DIR, "app.js"), "r", encoding="utf-8") as f:
+            self.js = f.read()
+
+    def test_online_hosting_guide_removed(self):
+        """Verifies that online hosting guide modal and button have been removed."""
+        self.assertNotIn("btn-hosting-eval", self.html, "Online hosting button should be removed")
+        self.assertNotIn("modal-hosting", self.html, "Online hosting modal should be removed")
+        self.assertNotIn("modal-hosting-ack", self.js, "Modal hosting JS listener should be removed")
+
+    def test_download_master_excel_button_removed(self):
+        """Verifies that download master excel button is removed from navbar and footer."""
+        self.assertNotIn("btn-download-master-excel", self.html, "Master excel navbar button should be removed")
+        self.assertNotIn('download="Indian_Equity_Mutual_Funds_Master.xlsx"', self.html, "Master excel links should be removed from UI")
+
+    def test_day_night_mode_switch_present(self):
+        """Verifies day/night switch button and logic exist."""
+        self.assertIn("theme-toggle-btn", self.html, "Theme toggle button must be present in HTML")
+        self.assertIn("initTheme", self.js, "Theme initialization function must be present in JS")
+        self.assertIn('[data-theme="light"]', self.css, "Light mode CSS rules must be present in style.css")
+
+    def test_alternate_category_selection_dropdown(self):
+        """Verifies alternate category dropdown selector exists and is wired in JS."""
+        self.assertIn("category-dropdown-select", self.html, "Alternate category dropdown must exist in HTML")
+        self.assertIn("category-dropdown-select", self.js, "Category dropdown must be wired in app.js")
+
+    def test_sticky_table_header_css(self):
+        """Verifies table header is sticky while scrolling down in table-responsive container."""
+        self.assertIn(".table-responsive", self.css)
+        self.assertIn("max-height:", self.css)
+        self.assertIn(".data-table thead", self.css)
+        self.assertIn("position: sticky", self.css)
+
+
 if __name__ == "__main__":
     unittest.main()
 
