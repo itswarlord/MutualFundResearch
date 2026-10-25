@@ -429,6 +429,12 @@ class TestWebAppUIChanges(unittest.TestCase):
         self.assertIn(".data-table thead", self.css)
         self.assertIn("position: sticky", self.css)
 
+    def test_all_equity_funds_option_removed(self):
+        """Verifies 'All Equity Funds' option is removed both from dropdown and category selector tabs."""
+        self.assertNotIn('<option value="All Equity Funds">', self.html, "'All Equity Funds' option must be removed from dropdown HTML")
+        self.assertNotIn('allOpt.value = "All Equity Funds"', self.js, "'All Equity Funds' must not be added to dropdown in app.js")
+        self.assertNotIn('selectCategory("All Equity Funds")', self.js, "'All Equity Funds' must not be added as a category tab in app.js")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -17,7 +17,6 @@ const state = {
 
 // Category Description Mapping
 const CATEGORY_DESCRIPTIONS = {
-  "All Equity Funds": "Master consolidated view tracking all 323 active open-ended equity schemes across India.",
   "Large Cap": "Minimum 80% investment in top 100 stocks by full market capitalization. Mandated benchmark: NIFTY 100 TRI.",
   "Mid Cap": "Minimum 65% in 101st to 250th stocks by market capitalization. High growth with moderate volatility. Mandated benchmark: NIFTY Midcap 150 TRI.",
   "Small Cap": "Minimum 65% in stocks ranked 251st and beyond. High potential return with higher volatility. Mandated benchmark: NIFTY Smallcap 250 TRI.",
@@ -42,7 +41,6 @@ const BENCHMARK_DETAILS = {
   "Focused Fund": { name: "NIFTY 500 TRI", proxy: "Motilal Oswal Nifty 500 Index Fund (147625)" },
   "Value & Contra": { name: "NIFTY 500 TRI", proxy: "Motilal Oswal Nifty 500 Index Fund (147625)" },
   "Dividend Yield": { name: "NIFTY 500 TRI", proxy: "Motilal Oswal Nifty 500 Index Fund (147625)" },
-  "All Equity Funds": { name: "SEBI Tier 1 Categorized Benchmarks", proxy: "Category-Specific Total Return Indices" },
 };
 
 // Initialize Application
@@ -228,10 +226,6 @@ function renderCategoryTabs() {
   const dropdown = document.getElementById("category-dropdown-select");
   if (dropdown) {
     dropdown.innerHTML = "";
-    const allOpt = document.createElement("option");
-    allOpt.value = "All Equity Funds";
-    allOpt.textContent = `All Equity Funds (${state.rawFunds.length} schemes)`;
-    dropdown.appendChild(allOpt);
 
     state.categories.forEach((cat) => {
       const opt = document.createElement("option");
@@ -242,14 +236,7 @@ function renderCategoryTabs() {
     dropdown.value = state.activeCategory;
   }
 
-  // 1. "All Equity Funds" tab
-  const allTab = document.createElement("button");
-  allTab.className = `cat-tab-btn ${state.activeCategory === "All Equity Funds" ? "active" : ""}`;
-  allTab.innerHTML = `All Equity Funds <span class="cat-tab-count">${state.rawFunds.length}</span>`;
-  allTab.addEventListener("click", () => selectCategory("All Equity Funds"));
-  container.appendChild(allTab);
-
-  // 2. Individual Category Tabs
+  // Individual Category Tabs
   state.categories.forEach((cat) => {
     const btn = document.createElement("button");
     btn.className = `cat-tab-btn ${state.activeCategory === cat.name ? "active" : ""}`;
@@ -295,16 +282,10 @@ function updateCategoryBanner() {
 
   // Update Category CSV Download link
   const dlBtn = document.getElementById("btn-download-cat-csv");
-  if (state.activeCategory === "All Equity Funds") {
-    dlBtn.href = "data/all_equity_summary.csv";
-    dlBtn.download = "all_equity_summary.csv";
-    dlBtn.textContent = "📥 Download Master CSV";
-  } else {
-    const slug = state.activeCategory.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-    dlBtn.href = `data/${slug}_summary.csv`;
-    dlBtn.download = `${slug}_summary.csv`;
-    dlBtn.textContent = `📥 Download ${state.activeCategory} CSV`;
-  }
+  const slug = state.activeCategory.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  dlBtn.href = `data/${slug}_summary.csv`;
+  dlBtn.download = `${slug}_summary.csv`;
+  dlBtn.textContent = `📥 Download ${state.activeCategory} CSV`;
 }
 
 // Filter and Sort Funds
@@ -312,7 +293,7 @@ function getFilteredFunds() {
   return state.rawFunds
     .filter((f) => {
       // Category Filter
-      if (state.activeCategory !== "All Equity Funds" && f.category !== state.activeCategory) {
+      if (f.category !== state.activeCategory) {
         return false;
       }
       // Search Filter
@@ -719,7 +700,7 @@ function drawRiskReturnChart() {
 
   // Filter funds with valid 3Y CAGR and Volatility
   const categoryFunds = state.rawFunds.filter((f) => {
-    if (state.activeCategory !== "All Equity Funds" && f.category !== state.activeCategory) return false;
+    if (f.category !== state.activeCategory) return false;
     return f.standard_deviation !== null && f.return_3y_cagr !== null;
   });
 
