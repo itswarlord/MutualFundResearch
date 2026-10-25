@@ -8,12 +8,15 @@ Supports:
 5. Advisorkhoj Volatility & Performance Rankings (Category-specific Volatility Rank & Quartile Q1-Q4)
 """
 
+import os
+import subprocess
+import glob
 import urllib.request
 import json
 import sqlite3
 import re
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (MutualFundResearchBot/2.0)"}
 ONE_FINANCE_EQUITY_URL = "https://onehub.1finance.co.in/scoring-ranking/mutual-funds/v2/schemes?type=Equity&page={page}&limit=100"
@@ -259,3 +262,312 @@ def compute_composite_rating(ratings_dict: Dict) -> Tuple[float, str]:
         tier = "WORST (Tier 5 - Lagging/Unproven)"
 
     return score, tier
+
+
+# ==============================================================================
+# Value Research Mutual Fund Insight PDF Extraction & Matching Engine
+# Parses official Scoreboard from Page 85 onwards (Pages 87-111)
+# ==============================================================================
+
+AMC_PATTERNS = [
+    ("aditya birla sun life", "absl"),
+    ("aditya birla sl", "absl"),
+    ("absl", "absl"),
+    ("icici prudential", "icici pru"),
+    ("icici pru", "icici pru"),
+    ("franklin templeton", "franklin"),
+    ("franklin india", "franklin"),
+    ("franklin", "franklin"),
+    ("mirae asset", "mirae"),
+    ("mirae", "mirae"),
+    ("motilal oswal", "motilal"),
+    ("motilal", "motilal"),
+    ("bank of india", "boi"),
+    ("bank of ind", "boi"),
+    ("boi", "boi"),
+    ("baroda bnp paribas", "baroda bnp"),
+    ("baroda bnp", "baroda bnp"),
+    ("canara robeco", "canara robeco"),
+    ("dsp", "dsp"),
+    ("edelweiss", "edelweiss"),
+    ("hdfc", "hdfc"),
+    ("hsbc", "hsbc"),
+    ("invesco india", "invesco"),
+    ("invesco", "invesco"),
+    ("iti", "iti"),
+    ("jm financial", "jm"),
+    ("jm", "jm"),
+    ("kotak mahindra", "kotak"),
+    ("kotak", "kotak"),
+    ("lic mf", "lic mf"),
+    ("lic", "lic mf"),
+    ("mahindra manulife", "mahindra manulife"),
+    ("navi", "navi"),
+    ("nippon india", "nippon"),
+    ("nippon", "nippon"),
+    ("parag parikh", "parag parikh"),
+    ("pgim india", "pgim"),
+    ("pgim", "pgim"),
+    ("quant", "quant"),
+    ("quantum", "quantum"),
+    ("sbi", "sbi"),
+    ("sundaram", "sundaram"),
+    ("tata", "tata"),
+    ("union", "union"),
+    ("uti", "uti"),
+    ("whiteoak capital", "whiteoak"),
+    ("whiteoak", "whiteoak"),
+    ("360 one", "360 one"),
+    ("abakkus", "abakkus"),
+    ("helios", "helios"),
+    ("trustmf", "trust"),
+    ("trust", "trust"),
+    ("samco", "samco"),
+    ("shriram", "shriram"),
+    ("groww", "groww"),
+    ("old bridge", "old bridge"),
+    ("taurus", "taurus"),
+    ("bandhan", "bandhan"),
+    ("bajaj finserv", "bajaj finserv"),
+    ("nj", "nj"),
+    ("unifi", "unifi"),
+    ("the wealth company", "the wealth company"),
+    ("alphagrep", "alphagrep"),
+    ("zerodha", "zerodha"),
+]
+
+
+def extract_amc(name: str) -> str:
+    """Extracts canonical AMC identifier from fund name."""
+    low = name.lower()
+    for pat, canonical in AMC_PATTERNS:
+        if re.search(r"\b" + re.escape(pat) + r"\b", low):
+            return canonical
+    return "unknown"
+
+
+def clean_fund_tokens(name: str) -> str:
+    """Normalizes fund name for tokenized similarity matching."""
+    s = name.lower()
+    s = re.sub(r"\(.*?\)", "", s)
+    s = re.sub(r" - direct.*| direct.*| growth.*", "", s)
+    s = s.replace("midcap", "mid cap").replace("flexicap", "flexi cap")
+    s = s.replace("largecap", "large cap").replace("multicap", "multi cap")
+    s = s.replace("smallcap", "small cap")
+    for pat, canonical in AMC_PATTERNS:
+        s = re.sub(r"\b" + re.escape(pat) + r"\b", canonical, s)
+    s = s.replace("&", "and")
+    s = s.replace("-", " ")
+    s = re.sub(r"\bfund\b|\bscheme\b|\bplan\b", "", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def parse_value_research_pdf_scoreboard(
+    pdf_path: Optional[str] = None,
+    cache_path: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Parses official Value Research Fund Ratings & Metrics from the reference PDF
+    starting from page 85 onwards (Scoreboard pages 87-111).
+    """
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if pdf_path is None:
+        default_pdf = os.path.join(repo_root, "reference", "mutual-fund-insight - May 2026.pdf")
+        if os.path.exists(default_pdf):
+            pdf_path = default_pdf
+        else:
+            candidates = glob.glob(os.path.join(repo_root, "reference", "*.pdf"))
+            if candidates:
+                pdf_path = candidates[0]
+
+    if not pdf_path or not os.path.exists(pdf_path):
+        print(f"[Warning] Value Research reference PDF not found at {pdf_path}")
+        return []
+
+    if cache_path is None:
+        cache_path = os.path.join(repo_root, "data", "valueresearch_pdf_ratings.json")
+
+    print(f"[Value Research PDF] Extracting Scoreboard ratings from: {os.path.basename(pdf_path)} (Pages 87-111)...")
+    parsed_funds: List[Dict[str, Any]] = []
+
+    for page in range(87, 112):
+        try:
+            cmd = ["pdftotext", "-layout", "-f", str(page), "-l", str(page), pdf_path, "-"]
+            out = subprocess.check_output(cmd).decode("utf-8", errors="replace")
+        except Exception as e:
+            print(f"[Warning] Failed to parse page {page} with pdftotext: {e}")
+            continue
+
+        current_category = None
+        for line in out.splitlines():
+            # Detect category header e.g. 'Equity: Large Cap', 'Equity: Mid Cap', etc.
+            m_cat = re.search(r"(?:Equity|Debt|Hybrid):\s*([A-Za-z0-9 &\'\.-]+?)(?:\s+[-0-9]|$)", line)
+            if m_cat:
+                c_name = m_cat.group(1).strip()
+                if len(c_name) > 2 and not c_name.startswith("Funds"):
+                    current_category = c_name
+
+            # Detect fund line starting with serial number
+            m_fund = re.match(r"^\s*(\d+)\s+([A-Za-z0-9 &\'\.-]+?)\s{2,}", line)
+            if not m_fund:
+                continue
+
+            s_no = int(m_fund.group(1))
+            raw_name = m_fund.group(2).strip()
+
+            # Skip header repeats or page footers
+            if "Mutual Fund Insight" in raw_name or raw_name in ["Fund Name", "Equity", "Debt", "Hybrid"]:
+                continue
+
+            # In Value Research PDFs, star symbols are rendered as byte \x90 (char 144)
+            stars = line.count("\x90")
+            is_nr = "NR" in line
+            # Rating: 1 to 5 stars, or 0 for NR (Not Rated / insufficient history)
+            rating = stars if stars > 0 else (0 if is_nr else None)
+
+            # Risk Grade: Low, -Avg (Below Avg), Avg, +Avg (Above Avg), High
+            rg_m = re.search(r"\s(Low|-Avg|Avg|\+Avg|High)\s", line)
+            risk_grade = rg_m.group(1) if rg_m else None
+            # Standardize label
+            risk_grade_label = {
+                "Low": "Low",
+                "-Avg": "Below Average",
+                "Avg": "Average",
+                "+Avg": "Above Average",
+                "High": "High"
+            }.get(risk_grade, risk_grade)
+
+            # 3-Year Average Monthly Rating at the end of the line (e.g. 4.4, 5.0)
+            avg_m = re.search(r"([0-9]+\.[0-9]+)\s*$", line)
+            avg_rating = float(avg_m.group(1)) if avg_m else None
+
+            # Expense ratio and AUM if present in line
+            # Format: ... [Risk] [Expense] [AUM] [Stars] [AvgRating]
+            exp_aum_m = re.search(r"\s([0-9]+\.[0-9]{2})\s+([0-9,]+)\s+", line)
+            expense_ratio = float(exp_aum_m.group(1)) if exp_aum_m else None
+            assets_cr = float(exp_aum_m.group(2).replace(",", "")) if exp_aum_m else None
+
+            fund_entry = {
+                "s_no": s_no,
+                "name": raw_name,
+                "clean_name": clean_fund_tokens(raw_name),
+                "amc": extract_amc(raw_name),
+                "category": current_category,
+                "rating": rating,
+                "stars": stars,
+                "is_nr": is_nr,
+                "risk_grade": risk_grade_label,
+                "risk_grade_code": risk_grade,
+                "avg_rating": avg_rating,
+                "expense_ratio": expense_ratio,
+                "assets_cr": assets_cr,
+                "page": page,
+            }
+            parsed_funds.append(fund_entry)
+
+    # Save to JSON cache for rapid loading
+    try:
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "source_pdf": os.path.basename(pdf_path),
+                "total_funds": len(parsed_funds),
+                "funds": parsed_funds
+            }, f, indent=2)
+        print(f"[Value Research PDF] Successfully parsed {len(parsed_funds)} funds; cached to {cache_path}.")
+    except Exception as e:
+        print(f"[Warning] Failed to save JSON cache: {e}")
+
+    return parsed_funds
+
+
+def get_or_load_vr_pdf_ratings(
+    pdf_path: Optional[str] = None,
+    cache_path: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Loads Value Research Scoreboard ratings from cache or extracts them from reference PDF.
+    """
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if cache_path is None:
+        cache_path = os.path.join(repo_root, "data", "valueresearch_pdf_ratings.json")
+
+    if pdf_path is None:
+        pdf_path = os.path.join(repo_root, "reference", "mutual-fund-insight - May 2026.pdf")
+
+    # If cache exists and is newer than PDF, load from cache
+    if os.path.exists(cache_path) and os.path.exists(pdf_path):
+        if os.path.getmtime(cache_path) >= os.path.getmtime(pdf_path):
+            try:
+                with open(cache_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    funds = data.get("funds", [])
+                    if funds:
+                        return funds
+            except Exception:
+                pass
+
+    return parse_value_research_pdf_scoreboard(pdf_path=pdf_path, cache_path=cache_path)
+
+
+def match_scheme_to_vr_pdf(
+    scheme_name: str,
+    category: str,
+    pdf_funds: List[Dict[str, Any]]
+) -> Optional[Dict[str, Any]]:
+    """
+    Matches an AMFI/database mutual fund scheme to its official Value Research Scoreboard record.
+    Uses AMC strict verification and category token scoring.
+    """
+    if not pdf_funds:
+        return None
+
+    db_amc = extract_amc(scheme_name)
+    candidates = [p for p in pdf_funds if p.get("amc") == db_amc]
+    if not candidates:
+        return None
+
+    db_clean = clean_fund_tokens(scheme_name)
+    db_words = set(db_clean.split())
+
+    best_match = None
+    best_score = 0.0
+
+    # Category alignment preferences (VR terminology vs AMFI category)
+    cat_aliases = {
+        "Large Cap": ["Large Cap"],
+        "Mid Cap": ["Mid Cap"],
+        "Small Cap": ["Small Cap"],
+        "Flexi Cap": ["Flexi Cap"],
+        "Multi Cap": ["Multi Cap"],
+        "Large & Mid Cap": ["Large & MidCap", "Large & Mid Cap"],
+        "ELSS": ["ELSS"],
+        "Focused Fund": ["Flexi Cap"],  # VR scorecard lists Focused funds in Flexi Cap
+        "Value & Contra": ["Value Oriented"],
+        "Dividend Yield": ["Thematic-Dividend Yield", "Thematic"],
+    }
+    preferred_vr_cats = cat_aliases.get(category, [category])
+
+    for cand in candidates:
+        cand_clean = cand.get("clean_name", "")
+        cand_words = set(cand_clean.split())
+        inter = db_words.intersection(cand_words)
+        if not inter:
+            continue
+
+        score = len(inter) / max(len(db_words), len(cand_words))
+
+        # Category bonus
+        if cand.get("category") in preferred_vr_cats:
+            score += 0.25
+
+        if score > best_score:
+            best_score = score
+            best_match = cand
+
+    if best_match and best_score >= 0.40:
+        return best_match
+
+    return None
+

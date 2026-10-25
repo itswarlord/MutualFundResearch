@@ -110,6 +110,8 @@ def init_db(db_path: str = DB_PATH):
                 morningstar_rating INTEGER,
                 morningstar_medalist TEXT,
                 valueresearch_rating INTEGER,
+                valueresearch_risk_grade TEXT,
+                valueresearch_avg_rating REAL,
                 crisil_rank TEXT,
                 one_finance_score INTEGER,
                 one_finance_rank TEXT,
@@ -120,6 +122,15 @@ def init_db(db_path: str = DB_PATH):
                 FOREIGN KEY (scheme_code) REFERENCES schemes(scheme_code) ON DELETE CASCADE
             );
         """)
+
+        # Migration check: ensure valueresearch columns exist in fund_ratings
+        cursor.execute("PRAGMA table_info(fund_ratings);")
+        fr_cols = [c[1] for c in cursor.fetchall()]
+        if fr_cols:
+            if "valueresearch_risk_grade" not in fr_cols:
+                cursor.execute("ALTER TABLE fund_ratings ADD COLUMN valueresearch_risk_grade TEXT;")
+            if "valueresearch_avg_rating" not in fr_cols:
+                cursor.execute("ALTER TABLE fund_ratings ADD COLUMN valueresearch_avg_rating REAL;")
 
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_nav_history_date ON nav_history(nav_date);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_schemes_amc ON schemes(amc);")
@@ -273,6 +284,8 @@ def save_fund_ratings(scheme_code: int, category: str, ratings: Dict[str, Any], 
                 morningstar_rating,
                 morningstar_medalist,
                 valueresearch_rating,
+                valueresearch_risk_grade,
+                valueresearch_avg_rating,
                 crisil_rank,
                 one_finance_score,
                 one_finance_rank,
@@ -280,7 +293,7 @@ def save_fund_ratings(scheme_code: int, category: str, ratings: Dict[str, Any], 
                 advisorkhoj_quartile,
                 aum_cr,
                 updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(scheme_code) DO UPDATE SET
                 category = excluded.category,
                 composite_score = excluded.composite_score,
@@ -289,6 +302,8 @@ def save_fund_ratings(scheme_code: int, category: str, ratings: Dict[str, Any], 
                 morningstar_rating = excluded.morningstar_rating,
                 morningstar_medalist = excluded.morningstar_medalist,
                 valueresearch_rating = excluded.valueresearch_rating,
+                valueresearch_risk_grade = excluded.valueresearch_risk_grade,
+                valueresearch_avg_rating = excluded.valueresearch_avg_rating,
                 crisil_rank = excluded.crisil_rank,
                 one_finance_score = excluded.one_finance_score,
                 one_finance_rank = excluded.one_finance_rank,
@@ -305,6 +320,8 @@ def save_fund_ratings(scheme_code: int, category: str, ratings: Dict[str, Any], 
             ratings.get("morningstar_rating"),
             ratings.get("morningstar_medalist"),
             ratings.get("valueresearch_rating"),
+            ratings.get("valueresearch_risk_grade"),
+            ratings.get("valueresearch_avg_rating"),
             ratings.get("crisil_rank"),
             ratings.get("one_finance_score"),
             ratings.get("one_finance_rank"),
@@ -367,6 +384,8 @@ def export_all_equity_data(db_path: str = DB_PATH):
                 r.morningstar_rating,
                 r.morningstar_medalist,
                 r.valueresearch_rating,
+                r.valueresearch_risk_grade,
+                r.valueresearch_avg_rating,
                 r.crisil_rank,
                 r.one_finance_score,
                 r.one_finance_rank,

@@ -21,6 +21,7 @@ Generates:
 import argparse
 import sys
 import time
+import sqlite3
 from fetcher import (
     fetch_all_amfi_equity_schemes,
     fetch_ter_map,
@@ -49,7 +50,9 @@ from ratings import (
     fetch_morningstar_rating_via_mc,
     compute_advisorkhoj_category_volatility_rankings,
     compute_composite_rating,
-    VR_CRISIL_MEDALIST_MAP
+    VR_CRISIL_MEDALIST_MAP,
+    get_or_load_vr_pdf_ratings,
+    match_scheme_to_vr_pdf,
 )
 
 DIVERSIFIED_EQUITY_CATEGORIES = [
@@ -175,6 +178,10 @@ def run_full_equity_pipeline(categories=None, limit_per_cat=0, plan_filter="Dire
     print("\n[6/6] Ingesting multi-agency ratings, computing composite scores, and ranking BEST to WORST...")
     adv_cat_rankings = compute_advisorkhoj_category_volatility_rankings(cat_vol_tuples)
 
+    # Ingest Value Research official Scoreboard ratings from reference PDF (Page 85 onwards)
+    pdf_ratings = get_or_load_vr_pdf_ratings()
+    print(f"Loaded Value Research Scoreboard records ({len(pdf_ratings)} funds from reference PDF).")
+
     # Ingest ratings per category and rank BEST to WORST
     for cat in categories:
         cat_funds = [s for s in selected_schemes if s["category"] == cat]
@@ -182,6 +189,7 @@ def run_full_equity_pipeline(categories=None, limit_per_cat=0, plan_filter="Dire
 
         for s in cat_funds:
             code = s["scheme_code"]
+            name = s["scheme_name"]
             isin = s["isin_growth"]
 
             of_info = of_map.get(isin, {})
@@ -190,7 +198,27 @@ def run_full_equity_pipeline(categories=None, limit_per_cat=0, plan_filter="Dire
             live_aum = of_info.get("live_aum")
 
             adv_rank, adv_q = adv_cat_rankings.get(code, (None, None))
-            vr_rating, crisil_rank, ms_medalist = VR_CRISIL_MEDALIST_MAP.get(isin, (None, None, None))
+
+            # Match with Value Research PDF Scoreboard
+            vr_match = match_scheme_to_vr_pdf(name, cat, pdf_ratings)
+            vr_rating = None
+            vr_risk_grade = None
+            vr_avg_rating = None
+            if vr_match:
+                raw_r = vr_match.get("rating")
+                vr_rating = raw_r if (raw_r and raw_r > 0) else None
+                vr_risk_grade = vr_match.get("risk_grade")
+                vr_avg_rating = vr_match.get("avg_rating")
+
+            # Fallback to hardcoded map if not matched in PDF
+            crisil_rank = None
+            ms_medalist = None
+            if isin in VR_CRISIL_MEDALIST_MAP:
+                map_vr, map_cr, map_med = VR_CRISIL_MEDALIST_MAP[isin]
+                if vr_rating is None:
+                    vr_rating = map_vr
+                crisil_rank = map_cr
+                ms_medalist = map_med
 
             ms_star = fetch_morningstar_rating_via_mc(isin)
             if ms_star is None and vr_rating:
@@ -202,6 +230,8 @@ def run_full_equity_pipeline(categories=None, limit_per_cat=0, plan_filter="Dire
                 "morningstar_rating": ms_star,
                 "morningstar_medalist": ms_medalist,
                 "valueresearch_rating": vr_rating,
+                "valueresearch_risk_grade": vr_risk_grade,
+                "valueresearch_avg_rating": vr_avg_rating,
                 "crisil_rank": crisil_rank,
                 "one_finance_score": one_f_score,
                 "one_finance_rank": one_f_rank,
@@ -227,6 +257,128 @@ def run_full_equity_pipeline(categories=None, limit_per_cat=0, plan_filter="Dire
     print("\n[Pipeline Complete] All data generated successfully!")
 
 
+def update_ratings_from_pdf(categories=None):
+    """
+    Directly incorporates Value Research PDF ratings for all schemes already stored in DB,
+    re-computes composite scores/tiers, and exports updated datasets.
+    Runs in seconds with zero network calls.
+    """
+    if categories is None:
+        categories = DIVERSIFIED_EQUITY_CATEGORIES
+
+    init_db()
+    pdf_ratings = get_or_load_vr_pdf_ratings()
+    print(f"Loaded Value Research Scoreboard records ({len(pdf_ratings)} funds parsed from reference PDF).")
+
+    with get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        schemes = cursor.execute("""
+            SELECT 
+                s.scheme_code, 
+                s.scheme_name, 
+                s.category, 
+                s.isin_growth, 
+                m.volatility_3y, 
+                r.morningstar_rating, 
+                r.morningstar_medalist, 
+                r.crisil_rank, 
+                r.one_finance_score, 
+                r.one_finance_rank, 
+                r.aum_cr
+            FROM schemes s
+            LEFT JOIN fund_metrics m ON s.scheme_code = m.scheme_code
+            LEFT JOIN fund_ratings r ON s.scheme_code = r.scheme_code
+            WHERE s.category IN ({seq})
+        """.format(seq=",".join(["?"] * len(categories))), categories).fetchall()
+
+    cat_vol_tuples = {}
+    for row in schemes:
+        cat = row["category"]
+        code = row["scheme_code"]
+        vol = row["volatility_3y"]
+        if vol is not None and vol > 0:
+            cat_vol_tuples.setdefault(cat, []).append((code, vol))
+
+    adv_cat_rankings = compute_advisorkhoj_category_volatility_rankings(cat_vol_tuples)
+
+    matched_count = 0
+    rated_count = 0
+
+    for cat in categories:
+        cat_funds = [s for s in schemes if s["category"] == cat]
+        cat_ratings_list = []
+
+        for s in cat_funds:
+            code = s["scheme_code"]
+            name = s["scheme_name"]
+            isin = s["isin_growth"]
+
+            adv_rank, adv_q = adv_cat_rankings.get(code, (None, None))
+
+            vr_match = match_scheme_to_vr_pdf(name, cat, pdf_ratings)
+            vr_rating = None
+            vr_risk_grade = None
+            vr_avg_rating = None
+            if vr_match:
+                matched_count += 1
+                raw_r = vr_match.get("rating")
+                if raw_r and raw_r > 0:
+                    vr_rating = raw_r
+                    rated_count += 1
+                vr_risk_grade = vr_match.get("risk_grade")
+                vr_avg_rating = vr_match.get("avg_rating")
+
+            # Fallback
+            crisil_rank = s["crisil_rank"]
+            ms_medalist = s["morningstar_medalist"]
+            if isin in VR_CRISIL_MEDALIST_MAP:
+                map_vr, map_cr, map_med = VR_CRISIL_MEDALIST_MAP[isin]
+                if vr_rating is None:
+                    vr_rating = map_vr
+                if not crisil_rank:
+                    crisil_rank = map_cr
+                if not ms_medalist:
+                    ms_medalist = map_med
+
+            ms_star = s["morningstar_rating"]
+            if ms_star is None and vr_rating:
+                ms_star = vr_rating
+
+            payload = {
+                "scheme_code": code,
+                "category": cat,
+                "morningstar_rating": ms_star,
+                "morningstar_medalist": ms_medalist,
+                "valueresearch_rating": vr_rating,
+                "valueresearch_risk_grade": vr_risk_grade,
+                "valueresearch_avg_rating": vr_avg_rating,
+                "crisil_rank": crisil_rank,
+                "one_finance_score": s["one_finance_score"],
+                "one_finance_rank": s["one_finance_rank"],
+                "advisorkhoj_volatility_rank": adv_rank,
+                "advisorkhoj_quartile": adv_q,
+                "aum_cr": s["aum_cr"],
+            }
+
+            score, tier = compute_composite_rating(payload)
+            payload["composite_score"] = score
+            payload["rating_tier"] = tier
+            cat_ratings_list.append(payload)
+
+        # Sort category funds BEST (Rank 1) to WORST
+        cat_ratings_list.sort(key=lambda x: (x["composite_score"], x.get("aum_cr") or 0.0), reverse=True)
+        for rk, item in enumerate(cat_ratings_list, 1):
+            item["composite_rank"] = rk
+            save_fund_ratings(item["scheme_code"], cat, item)
+
+    print(f"\n[Value Research Ingestion] Matched {matched_count}/{len(schemes)} schemes with PDF scorecard.")
+    print(f"[Value Research Ingestion] Assigned 1-to-5 star ratings to {rated_count} schemes.")
+    print("\nRegenerating all separate CSV sheets and Master Excel Workbook...")
+    export_all_equity_data()
+    print("[Success] All ratings updated and exported!")
+
+
 def print_category_leaderboard(category="Flexi Cap"):
     """Prints leaderboard for a given category."""
     with get_connection() as conn:
@@ -248,7 +400,8 @@ def print_category_leaderboard(category="Flexi Cap"):
                 r.valueresearch_rating,
                 r.crisil_rank,
                 r.one_finance_score,
-                r.aum_cr
+                r.aum_cr,
+                r.valueresearch_risk_grade
             FROM schemes s
             JOIN fund_metrics m ON s.scheme_code = m.scheme_code
             LEFT JOIN fund_ratings r ON s.scheme_code = r.scheme_code
@@ -293,6 +446,7 @@ def print_category_leaderboard(category="Flexi Cap"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Indian Equity Mutual Funds Data Pipeline")
     parser.add_argument("--sync", action="store_true", help="Run full pipeline across equity categories")
+    parser.add_argument("--update-ratings", action="store_true", help="Incorporate Value Research PDF ratings and recompute rankings")
     parser.add_argument("--category", type=str, default="", help="Specific category to run or inspect")
     parser.add_argument("--report", action="store_true", help="Display leaderboard report")
     parser.add_argument("--limit-per-cat", type=int, default=0, help="Limit number of schemes per category")
@@ -305,8 +459,13 @@ if __name__ == "__main__":
         run_full_equity_pipeline(categories=target_cats, limit_per_cat=args.limit_per_cat)
         for cat in target_cats[:4]:
             print_category_leaderboard(cat)
+    elif getattr(args, "update_ratings", False):
+        update_ratings_from_pdf(categories=target_cats)
+        for cat in target_cats[:4]:
+            print_category_leaderboard(cat)
     elif args.report:
         for cat in target_cats:
             print_category_leaderboard(cat)
     else:
         parser.print_help()
+

@@ -324,6 +324,12 @@ function renderTable() {
       const msStar = fund.morningstar_rating ? `${fund.morningstar_rating}★` : "-";
       const msMed = fund.morningstar_medalist ? ` (${fund.morningstar_medalist[0]})` : "";
       const vrStar = fund.valueresearch_rating ? `${fund.valueresearch_rating}★` : "-";
+      const vrRisk = fund.valueresearch_risk_grade ? ` (${fund.valueresearch_risk_grade} Risk)` : "";
+      const vrAvg = fund.valueresearch_avg_rating ? ` • 3Y Avg: ${fund.valueresearch_avg_rating}★` : "";
+      const vrTooltip = fund.valueresearch_rating
+        ? `Value Research Scoreboard: ${fund.valueresearch_rating} Stars${vrRisk}${vrAvg}`
+        : "Value Research: Not Rated (NR) / Insufficient Track Record";
+
       const crRank = fund.crisil_rank ? fund.crisil_rank.replace("Rank ", "R") : "-";
       const ofScore = fund.one_finance_score && fund.one_finance_score > 0 ? fund.one_finance_score : "-";
       const advQ = fund.advisorkhoj_quartile ? fund.advisorkhoj_quartile.split(" ")[0] : "-";
@@ -377,7 +383,7 @@ function renderTable() {
           <td class="col-ratings">
             <div class="agency-ratings-grid">
               <span class="agency-chip ms" title="Morningstar Rating">MS: ${msStar}${msMed}</span>
-              <span class="agency-chip vr" title="Value Research Rating">VR: ${vrStar}</span>
+              <span class="agency-chip vr" title="${escapeHtml(vrTooltip)}">VR: ${vrStar}</span>
               <span class="agency-chip cr" title="CRISIL CMFR Rank">CR: ${crRank}</span>
               <span class="agency-chip of" title="1 Finance Score (out of 100)">1F: ${ofScore}</span>
               <span class="agency-chip adv" title="Advisorkhoj Volatility Quartile">ADV: ${advQ}</span>
@@ -575,6 +581,8 @@ function openFundDrawer(schemeCode) {
         <div class="d-stat-box" style="text-align: left;">
           <div class="d-stat-label">Value Research Rating</div>
           <div class="d-stat-val" style="color: #38bdf8;">${vrStar}</div>
+          ${fund.valueresearch_risk_grade ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">Risk: <strong style="color: #e2e8f0;">${fund.valueresearch_risk_grade}</strong></div>` : ""}
+          ${fund.valueresearch_avg_rating ? `<div style="font-size: 11px; color: #94a3b8;">3Y Avg: <strong style="color: #f59e0b;">${fund.valueresearch_avg_rating}★</strong></div>` : ""}
         </div>
         <div class="d-stat-box" style="text-align: left;">
           <div class="d-stat-label">CRISIL CMFR Rank</div>

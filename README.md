@@ -44,33 +44,43 @@ Each category is also exported as an individual, clean CSV file, sorted with **"
 ---
 
 ## 🏆 Category Leaderboard Snapshots (BEST to WORST)
+*Synthesized using multi-agency ratings including official **Value Research Scoreboard (Pages 85–111 in reference PDF)**, Morningstar, CRISIL, 1 Finance, and Advisorkhoj.*
 
 ### 1. Flexi Cap Funds (Top 5)
-| Rank | Scheme Name | Tier & Score | 3Y CAGR | Std Dev | Sharpe | Beta | Alpha | Capture Ratio | Live AUM (₹ Cr) |
-| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **01** | **Parag Parikh Flexi Cap Fund** | **BEST (97.5/100)** | 12.29% | **9.90%** | 0.53 | **0.61** | **+4.26%** | **1.44** | **₹145,070 Cr** |
-| **02** | **HDFC Flexi Cap Fund** | **BEST (96.0/100)** | 14.39% | 12.12% | **0.61** | 0.80 | **+5.96%** | **1.32** | **₹108,547 Cr** |
-| **03** | **Bank of India Flexi Cap Fund** | **Tier 2 (74.2/100)** | **17.39%** | 17.68% | 0.59 | 1.13 | **+8.10%** | **1.35** | ₹3,098 Cr |
-| **04** | **Kotak Flexi Cap Fund** | **Tier 2 (73.9/100)** | 10.32% | 14.60% | 0.23 | 0.99 | +1.26% | 1.06 | ₹53,087 Cr |
-| **05** | **Edelweiss Flexi Cap Fund** | **Tier 2 (73.9/100)** | 13.16% | 14.72% | 0.42 | 1.01 | **+4.16%** | **1.18** | ₹3,509 Cr |
+| Rank | Scheme Name | Tier & Score | 3Y CAGR | Std Dev | Sharpe | Beta | Alpha | Capture Ratio | VR Rating | Live AUM (₹ Cr) |
+| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **01** | **Parag Parikh Flexi Cap Fund** | **BEST (97.5/100)** | 12.29% | **9.90%** | 0.53 | **0.61** | **+4.26%** | **1.44** | **5★ (Low Risk)** | **₹145,070 Cr** |
+| **02** | **HDFC Flexi Cap Fund** | **BEST (96.0/100)** | 14.39% | 12.12% | **0.61** | 0.80 | **+5.96%** | **1.32** | **5★ (Low Risk)** | **₹108,547 Cr** |
+| **03** | **WhiteOak Capital Flexi Cap Fund** | **BEST (75.7/100)** | 13.14% | 13.83% | 0.44 | 0.94 | **+4.26%** | **1.18** | **4★ (-Avg Risk)** | ₹9,325 Cr |
+| **04** | **Mahindra Manulife Flexi Cap Fund**| **BEST (75.1/100)** | 8.43% | 13.69% | 0.10 | 0.93 | -0.45% | 0.97 | **4★ (-Avg Risk)** | ₹1,510 Cr |
+| **05** | **Invesco India Flexi Cap Fund** | **Tier 2 (74.9/100)** | **15.41%** | 15.69% | 0.54 | 1.03 | **+6.39%** | **1.27** | **5★ (Avg Risk)** | ₹5,437 Cr |
 
 ### 2. Large Cap Funds (Top 5)
-| Rank | Scheme Name | Tier & Score | 3Y CAGR | Std Dev | Sharpe | Beta | Alpha | Capture Ratio | Live AUM (₹ Cr) |
-| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **01** | **UTI Large Cap Fund** | **Tier 3 (52.2/100)** | 6.82% | 12.61% | -0.01 | 0.84 | -1.85% | 0.91 | ₹9,673 Cr |
-| **02** | **ICICI Prudential Large Cap (Bluechip)** | **Tier 3 (51.9/100)** | 9.57% | 12.73% | 0.20 | 0.86 | +0.89% | 1.03 | **₹76,352 Cr** |
-| **03** | **SBI Large Cap Fund** | **Tier 3 (51.9/100)** | 8.02% | 12.63% | 0.08 | 0.85 | -0.66% | 0.97 | **₹52,373 Cr** |
-| **04** | **Sundaram Large Cap Fund** | **Tier 3 (50.7/100)** | 7.10% | 12.89% | 0.01 | 0.86 | -1.62% | 0.92 | ₹2,866 Cr |
-| **05** | **DSP Large Cap Fund** | **Tier 3 (50.1/100)** | 10.04% | 12.36% | 0.25 | 0.81 | +1.42% | 1.08 | ₹6,642 Cr |
+| Rank | Scheme Name | Tier & Score | 3Y CAGR | Std Dev | Sharpe | Beta | Alpha | Capture Ratio | VR Rating | Live AUM (₹ Cr) |
+| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **01** | **ICICI Prudential Large Cap (Bluechip)** | **BEST (94.2/100)** | 9.57% | 12.73% | 0.20 | 0.91 | **+1.86%** | **1.03** | **5★ (Low Risk)** | **₹76,352 Cr** |
+| **02** | **DSP Large Cap Fund** | **BEST (92.9/100)** | 10.04% | 12.36% | 0.25 | 0.86 | **+2.34%** | **1.08** | **5★ (Low Risk)** | ₹6,642 Cr |
+| **03** | **Nippon India Large Cap Fund** | **BEST (83.9/100)** | 10.08% | 13.29% | 0.23 | 0.97 | **+2.28%** | **1.07** | **5★ (Low Risk)** | **₹51,296 Cr** |
+| **04** | **SBI Large Cap Fund** | **BEST (82.8/100)** | 8.02% | 12.63% | 0.08 | 0.90 | +0.31% | 0.97 | **4★ (-Avg Risk)** | **₹52,373 Cr** |
+| **05** | **HDFC Large Cap Fund** | **BEST (82.2/100)** | 7.54% | 12.44% | 0.04 | 0.97 | -0.21% | 0.96 | **5★ (Low Risk)** | **₹37,294 Cr** |
 
-### 3. Small Cap Funds (Top 5)
-| Rank | Scheme Name | Tier & Score | 3Y CAGR | Std Dev | Sharpe | Beta | Alpha | Capture Ratio | Live AUM (₹ Cr) |
-| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **01** | **SBI Small Cap Fund** | **Tier 3 (51.0/100)** | 9.46% | 14.25% | 0.17 | 0.84 | +0.83% | 1.02 | ₹41,059 Cr |
-| **02** | **Axis Small Cap Fund** | **Tier 3 (51.0/100)** | 12.90% | 15.05% | 0.39 | 0.93 | **+4.08%** | **1.15** | ₹30,678 Cr |
-| **03** | **Kotak Small Cap Fund** | **Tier 3 (51.0/100)** | 10.20% | 15.49% | 0.21 | 0.93 | +1.23% | 1.06 | ₹19,141 Cr |
-| **04** | **ICICI Prudential Small Cap Fund** | **Tier 4 (49.5/100)** | 9.24% | 14.41% | 0.16 | 0.89 | +0.55% | 1.01 | ₹9,791 Cr |
-| **05** | **PGIM India Small Cap Fund** | **Tier 4 (46.2/100)** | 13.58% | 15.68% | 0.42 | 0.91 | **+4.74%** | **1.19** | ₹1,739 Cr |
+### 3. Mid Cap Funds (Top 5)
+| Rank | Scheme Name | Tier & Score | 3Y CAGR | Std Dev | Sharpe | Beta | Alpha | Capture Ratio | VR Rating | Live AUM (₹ Cr) |
+| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **01** | **HDFC Mid Cap Fund** | **BEST (93.1/100)** | 15.27% | 13.56% | 0.61 | 0.84 | **+3.50%** | **1.11** | **5★ (Low Risk)** | **₹101,856 Cr** |
+| **02** | **WhiteOak Capital Mid Cap Fund** | **BEST (85.6/100)** | **19.17%** | 14.54% | 0.84 | 0.90 | **+7.13%** | **1.24** | **5★ (Low Risk)** | ₹7,540 Cr |
+| **03** | **Nippon India Growth Mid Cap Fund**| **BEST (82.0/100)** | 15.64% | 14.63% | 0.59 | 0.95 | **+3.17%** | **1.10** | **5★ (-Avg Risk)** | **₹50,176 Cr** |
+| **04** | **Edelweiss Mid Cap Fund** | **BEST (82.0/100)** | 18.18% | 14.77% | 0.76 | 0.95 | **+5.82%** | **1.21** | **5★ (-Avg Risk)** | ₹19,230 Cr |
+| **05** | **Baroda BNP Paribas Mid Cap Fund** | **BEST (80.6/100)** | 14.22% | 13.92% | 0.52 | 0.86 | **+2.25%** | **1.05** | **4★ (Low Risk)** | ₹2,503 Cr |
+
+### 4. Small Cap Funds (Top 5)
+| Rank | Scheme Name | Tier & Score | 3Y CAGR | Std Dev | Sharpe | Beta | Alpha | Capture Ratio | VR Rating | Live AUM (₹ Cr) |
+| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **01** | **BANDHAN Small Cap Fund** | **BEST (83.9/100)** | **22.10%** | 17.43% | 0.87 | 0.89 | **+11.41%**| **1.39** | **5★ (Avg Risk)** | **₹35,856 Cr** |
+| **02** | **Invesco India Small Cap Fund** | **BEST (82.4/100)** | 19.45% | 17.99% | 0.69 | 0.90 | **+8.72%** | **1.27** | **5★ (-Avg Risk)** | ₹16,131 Cr |
+| **03** | **Axis Small Cap Fund** | **BEST (82.1/100)** | 12.90% | 15.05% | 0.39 | 0.76 | **+2.72%** | **1.03** | **4★ (Low Risk)** | **₹30,678 Cr** |
+| **04** | **Nippon India Small Cap Fund** | **BEST (77.2/100)** | 12.62% | 16.60% | 0.34 | 0.85 | **+2.06%** | **1.02** | **4★ (-Avg Risk)** | **₹80,906 Cr** |
+| **05** | **Edelweiss Small Cap Fund** | **BEST (76.8/100)** | 12.77% | 16.38% | 0.35 | 0.82 | **+2.27%** | **1.03** | **4★ (Low Risk)** | ₹7,000 Cr |
 
 ---
 
@@ -119,14 +129,20 @@ All CAPM sensitivity metrics and capture ratios are evaluated **against each cat
 ```bash
 python3 src/main.py --sync
 ```
-This command concurrently ingests all 320+ schemes, computes rolling returns and risk/CAPM metrics against each category's designated SEBI benchmark, ingests ratings, and updates all category CSVs and the single master Excel file.
+This command concurrently ingests all 320+ schemes, computes rolling returns and risk/CAPM metrics against each category's designated SEBI benchmark, ingests Value Research PDF scoreboard ratings and multi-agency scores, and updates all category CSVs and the master Excel file.
 
-### 2. Run for a Specific Category
+### 2. Incorporate / Refresh Ratings from PDF (Zero Network Calls, Fast)
+```bash
+python3 src/main.py --update-ratings
+```
+Parses the official Value Research *Mutual Fund Insight* Scoreboard from `reference/` (Page 85 onwards), matches funds to the database with AMC-strict verification, re-computes composite scores, and regenerates all CSV, Excel, and Web files.
+
+### 3. Run for a Specific Category
 ```bash
 python3 src/main.py --sync --category "Small Cap"
 ```
 
-### 3. Display Leaderboard in Terminal
+### 4. Display Leaderboard in Terminal
 ```bash
 python3 src/main.py --report --category "Mid Cap"
 ```

@@ -62,6 +62,13 @@ class MutualFundAppHandler(http.server.SimpleHTTPRequestHandler):
         # 4. Standard Static File Serving
         return super().do_GET()
 
+    def do_HEAD(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if path == "/download/excel" or path == "/download/csv/master" or path.startswith("/download/csv/"):
+            return self.do_GET()
+        return super().do_HEAD()
+
     def send_file(self, filepath: str, content_type: str, download_filename: str):
         try:
             with open(filepath, "rb") as f:
@@ -73,7 +80,8 @@ class MutualFundAppHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Disposition", f'attachment; filename="{download_filename}"')
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            self.wfile.write(content)
+            if self.command != "HEAD":
+                self.wfile.write(content)
         except Exception as e:
             self.send_error(500, f"Error streaming file: {e}")
 
