@@ -572,9 +572,14 @@ function openFundDrawer(schemeCode) {
           <span>Fund Executive Summary</span>
           <span class="summary-badge ${isAi ? "ai-badge" : ""}" id="drawer-summary-badge">${badgeText}</span>
         </div>
-        <button class="btn-generate-ai" id="btn-ai-regenerate" onclick="generateLiveGeminiSummary(${fund.scheme_code})" title="Generate dynamic live AI insights using Google Gemini 2.0 Flash">
-          ⚡ Run Gemini AI
-        </button>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button class="btn-generate-ai" id="btn-ai-regenerate" onclick="generateLiveGeminiSummary(${fund.scheme_code})" title="Generate dynamic live AI insights using Google Gemini">
+            ⚡ Run Gemini AI
+          </button>
+          <button class="btn-key-settings" onclick="changeGeminiApiKey(event)" title="Configure or update saved Gemini API Key">
+            ⚙️
+          </button>
+        </div>
       </div>
       <div class="fund-summary-body" id="drawer-summary-body">
         ${summaryHtml}
@@ -895,14 +900,83 @@ function escapeHtml(str) {
     .replace(/'/g, "&#039;");
 }
 
-// Live Dynamic AI Summary Generator via Google Gemini 2.0 Flash
+// Configure or update saved Gemini API Key
+function changeGeminiApiKey(event) {
+  if (event) event.stopPropagation();
+  const currentKey = localStorage.getItem("mf_gemini_api_key") || "";
+  const newKey = prompt(
+    "Enter your Google Gemini API Key\n(Get a free key instantly at https://aistudio.google.com/):",
+    currentKey
+  );
+  if (newKey !== null) {
+    if (newKey.trim()) {
+      localStorage.setItem("mf_gemini_api_key", newKey.trim());
+      sessionStorage.removeItem("mf_resolved_gemini_model");
+      alert("✅ Gemini API Key saved. You can now click '⚡ Run Gemini AI'.");
+    } else {
+      localStorage.removeItem("mf_gemini_api_key");
+      sessionStorage.removeItem("mf_resolved_gemini_model");
+      alert("API Key removed from browser storage.");
+    }
+  }
+}
+
+// Dynamically resolve the best active Gemini model supported by the user's API key
+async function resolveGeminiModel(apiKey) {
+  const cachedModel = sessionStorage.getItem("mf_resolved_gemini_model");
+  if (cachedModel) return cachedModel;
+
+  const candidateModels = [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-exp",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-pro",
+    "gemini-pro"
+  ];
+
+  try {
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (resp.ok) {
+      const data = await resp.json();
+      const available = (data.models || [])
+        .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+        .map((m) => m.name.replace("models/", ""));
+
+      for (const cand of candidateModels) {
+        if (available.includes(cand)) {
+          sessionStorage.setItem("mf_resolved_gemini_model", cand);
+          return cand;
+        }
+      }
+
+      const anyFlash = available.find((m) => m.includes("flash"));
+      if (anyFlash) {
+        sessionStorage.setItem("mf_resolved_gemini_model", anyFlash);
+        return anyFlash;
+      }
+
+      if (available.length > 0) {
+        sessionStorage.setItem("mf_resolved_gemini_model", available[0]);
+        return available[0];
+      }
+    }
+  } catch (e) {
+    console.warn("Unable to query ListModels, falling back to candidates", e);
+  }
+
+  return "gemini-1.5-flash";
+}
+
+// Live Dynamic AI Summary Generator via Google Gemini API
 async function generateLiveGeminiSummary(schemeCode) {
   const fund = state.rawFunds.find((f) => f.scheme_code === schemeCode);
   if (!fund) return;
 
   let apiKey = localStorage.getItem("mf_gemini_api_key");
   if (!apiKey) {
-    apiKey = prompt("Enter your Google Gemini API Key (stored locally in browser only for dynamic AI generation):");
+    apiKey = prompt("Enter your Google Gemini API Key (stored locally in browser only for dynamic AI generation):\nGet a free key at: https://aistudio.google.com/");
     if (!apiKey || !apiKey.trim()) return;
     apiKey = apiKey.trim();
     localStorage.setItem("mf_gemini_api_key", apiKey);
@@ -920,7 +994,7 @@ async function generateLiveGeminiSummary(schemeCode) {
   if (bodyEl) {
     bodyEl.innerHTML = `
       <div style="padding: 20px; text-align: center; color: #38bdf8; font-size: 13px;">
-        <span style="display:inline-block; animation: pulse 1s infinite;">✨</span> Calling Google Gemini 2.0 Flash for live quantitative insights...
+        <span style="display:inline-block; animation: pulse 1s infinite;">✨</span> Calling Google Gemini for live quantitative insights...
       </div>
     `;
   }
@@ -959,62 +1033,115 @@ ${JSON.stringify({
   aum_cr: fund.aum_cr
 }, null, 2)}`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: promptText }] }],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: "application/json"
-        }
-      })
-    });
+    // Resolve model or try candidates sequentially to prevent 404
+    const resolvedModel = await resolveGeminiModel(apiKey);
+    const candidateModels = [
+      resolvedModel,
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-2.0-flash-exp",
+      "gemini-1.5-flash",
+      "gemini-1.5-flash-latest",
+      "gemini-pro"
+    ].filter((m, i, arr) => arr.indexOf(m) === i);
 
-    if (!resp.ok) {
-      if (resp.status === 400 || resp.status === 403) {
-        localStorage.removeItem("mf_gemini_api_key");
-        throw new Error("Invalid Gemini API Key. Please verify your key at https://aistudio.google.com/");
+    let successData = null;
+    let usedModel = resolvedModel;
+    let lastError = null;
+
+    for (const model of candidateModels) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      try {
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: promptText }] }],
+            generationConfig: {
+              temperature: 0.2,
+              responseMimeType: "application/json"
+            }
+          })
+        });
+
+        if (resp.ok) {
+          successData = await resp.json();
+          usedModel = model;
+          sessionStorage.setItem("mf_resolved_gemini_model", model);
+          break;
+        }
+
+        const errBody = await resp.json().catch(() => null);
+        const errMsg = errBody?.error?.message || `HTTP ${resp.status}`;
+
+        if (resp.status === 404) {
+          // Model not found for this key/region, try next candidate
+          lastError = `Model ${model} not found (${errMsg})`;
+          continue;
+        } else if (resp.status === 400 || resp.status === 403) {
+          localStorage.removeItem("mf_gemini_api_key");
+          sessionStorage.removeItem("mf_resolved_gemini_model");
+          throw new Error(`Authentication/Permission Failed: ${errMsg}\nPlease verify your key at https://aistudio.google.com/`);
+        } else {
+          lastError = errMsg;
+        }
+      } catch (reqErr) {
+        if (reqErr.message && reqErr.message.includes("Authentication/Permission Failed")) {
+          throw reqErr;
+        }
+        lastError = reqErr.message;
       }
-      throw new Error(`Gemini API returned status ${resp.status}`);
     }
 
-    const data = await resp.json();
-    const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!successData) {
+      throw new Error(
+        lastError || "Could not connect to an active Gemini model. Please check that Generative Language API is enabled for your key at https://aistudio.google.com/"
+      );
+    }
+
+    const candidateText = successData.candidates?.[0]?.content?.parts?.[0]?.text;
     const parsed = JSON.parse(candidateText);
     const lines = parsed.summary_lines;
 
     if (Array.isArray(lines) && lines.length >= 5) {
       fund.summary_lines = lines;
       fund.summary = lines.join("\n");
-      fund.summary_source = "gemini-2.0-flash";
+      fund.summary_source = usedModel;
 
+      const modelDisplayName = usedModel.replace("gemini-", "").replace("-latest", "");
       if (badgeEl) {
-        badgeEl.textContent = "✨ Live Gemini 2.0 Flash";
+        badgeEl.textContent = `✨ Gemini ${modelDisplayName} AI`;
         badgeEl.classList.add("ai-badge");
       }
       if (bodyEl) {
-        bodyEl.innerHTML = lines.map((l, i) => `
+        bodyEl.innerHTML = lines
+          .map(
+            (l, i) => `
           <div class="summary-line-item">
             <span class="summary-line-num">${i + 1}</span>
             <div class="summary-line-text">${escapeHtml(l)}</div>
           </div>
-        `).join("");
+        `
+          )
+          .join("");
       }
     } else {
-      throw new Error("Invalid format received from Gemini model.");
+      throw new Error("Unexpected format returned from Gemini model.");
     }
   } catch (err) {
-    alert("Gemini AI Generation Notice: " + err.message);
+    alert("Gemini AI Notice: " + err.message);
     const defaultLines = getFundSummaryLines(fund);
     if (bodyEl) {
-      bodyEl.innerHTML = defaultLines.map((l, i) => `
+      bodyEl.innerHTML = defaultLines
+        .map(
+          (l, i) => `
         <div class="summary-line-item">
           <span class="summary-line-num">${i + 1}</span>
           <div class="summary-line-text">${escapeHtml(l)}</div>
         </div>
-      `).join("");
+      `
+        )
+        .join("");
     }
     if (badgeEl) {
       badgeEl.textContent = `${defaultLines.length} Core Insights`;
@@ -1024,4 +1151,5 @@ ${JSON.stringify({
     if (btnEl) btnEl.disabled = false;
   }
 }
+
 

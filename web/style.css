@@ -1404,6 +1404,25 @@ body {
   transform: none;
 }
 
+.btn-key-settings {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-dim);
+  padding: 4px 7px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.btn-key-settings:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  border-color: #38bdf8;
+  transform: translateY(-1px);
+}
+
 .fund-summary-body {
   display: flex;
   flex-direction: column;
@@ -1926,6 +1945,17 @@ body {
   background: #e9d5ff;
   border-color: #c084fc;
   color: #6b21a8;
+}
+
+[data-theme="light"] .btn-key-settings {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #64748b;
+}
+
+[data-theme="light"] .btn-key-settings:hover {
+  background: #e2e8f0;
+  color: #0f172a;
 }
 
 [data-theme="light"] .drawer-card h4 {

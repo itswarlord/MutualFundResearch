@@ -23,7 +23,15 @@ REPO_ROOT = os.path.dirname(CURRENT_DIR)
 DATA_DIR = os.path.join(REPO_ROOT, "data")
 CACHE_FILE = os.path.join(DATA_DIR, "ai_summaries_cache.json")
 
-# Default cheapest and fastest Gemini model
+# Default cheapest and fastest Gemini models in priority order
+CANDIDATE_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-exp",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-pro"
+]
 DEFAULT_MODEL = "gemini-2.0-flash"
 BACKUP_MODEL = "gemini-1.5-flash"
 GEMINI_API_URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
@@ -213,9 +221,14 @@ def call_gemini_api(
             if e.code in (429, 503):
                 wait_time = (2 ** attempt) * 2
                 time.sleep(wait_time)
-            elif e.code == 404 and model != BACKUP_MODEL:
-                # If model not available, try backup model
-                return call_gemini_api(payload, api_key, model=BACKUP_MODEL, max_retries=1)
+            elif e.code == 404:
+                # If model not available, try other candidate models in priority order
+                for alt_model in CANDIDATE_MODELS:
+                    if alt_model != model:
+                        alt_res = call_gemini_api(payload, api_key, model=alt_model, max_retries=1)
+                        if alt_res:
+                            return alt_res
+                return None
             else:
                 return None
         except Exception:
