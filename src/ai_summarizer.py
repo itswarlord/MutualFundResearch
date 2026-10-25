@@ -23,17 +23,19 @@ REPO_ROOT = os.path.dirname(CURRENT_DIR)
 DATA_DIR = os.path.join(REPO_ROOT, "data")
 CACHE_FILE = os.path.join(DATA_DIR, "ai_summaries_cache.json")
 
-# Default cheapest and fastest Gemini models in priority order
+# Default Gemini models in priority order (supporting latest 3.x and 2.x releases)
 CANDIDATE_MODELS = [
+    "gemini-3.1-pro",
+    "gemini-3.1-flash",
+    "gemini-3-pro",
+    "gemini-3-flash",
+    "gemini-2.5-pro",
     "gemini-2.5-flash",
     "gemini-2.0-flash",
-    "gemini-2.0-flash-exp",
     "gemini-1.5-flash",
-    "gemini-1.5-flash-latest",
-    "gemini-pro"
 ]
-DEFAULT_MODEL = "gemini-2.0-flash"
-BACKUP_MODEL = "gemini-1.5-flash"
+DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-pro")
+BACKUP_MODEL = "gemini-2.5-flash"
 GEMINI_API_URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
 
 

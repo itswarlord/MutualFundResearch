@@ -716,7 +716,7 @@ class TestGeminiAISummarizer(unittest.TestCase):
         self.assertIn("contents", payload)
         self.assertIn("generationConfig", payload)
         self.assertEqual(payload["generationConfig"]["responseMimeType"], "application/json")
-        self.assertEqual(DEFAULT_MODEL, "gemini-2.0-flash")
+        self.assertEqual(DEFAULT_MODEL, "gemini-3.1-pro")
 
         # Check prompt text contains fund details
         prompt_text = payload["contents"][0]["parts"][0]["text"]
@@ -776,6 +776,7 @@ class TestGeminiAISummarizer(unittest.TestCase):
         with open(os.path.join(WEB_DIR, "app.js"), "r", encoding="utf-8") as f:
             js = f.read()
         self.assertIn("generateLiveGeminiSummary", js)
+        self.assertIn("gemini-3.1-pro", js)
         self.assertIn("gemini-2.0-flash", js)
         self.assertIn("btn-generate-ai", js)
         self.assertIn("ai-badge", js)

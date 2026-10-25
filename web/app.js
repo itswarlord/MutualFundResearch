@@ -900,19 +900,38 @@ function escapeHtml(str) {
     .replace(/'/g, "&#039;");
 }
 
-// Configure or update saved Gemini API Key
+// Get user-configured or default Gemini model
+function getSavedGeminiModel() {
+  const custom = localStorage.getItem("mf_gemini_model");
+  if (custom && custom.trim()) {
+    return custom.trim().toLowerCase().replace(/\s+/g, "-");
+  }
+  return "gemini-3.1-pro";
+}
+
+// Configure or update saved Gemini API Key & Model
 function changeGeminiApiKey(event) {
   if (event) event.stopPropagation();
   const currentKey = localStorage.getItem("mf_gemini_api_key") || "";
+  const currentModel = getSavedGeminiModel();
+
   const newKey = prompt(
-    "Enter your Google Gemini API Key\n(Get a free key instantly at https://aistudio.google.com/):",
+    "Enter your Google Gemini API Key\n(Get a free key at https://aistudio.google.com/):",
     currentKey
   );
   if (newKey !== null) {
     if (newKey.trim()) {
       localStorage.setItem("mf_gemini_api_key", newKey.trim());
+      const newModel = prompt(
+        "Enter your Gemini Model Name (e.g. gemini-3.1-pro, gemini-3.1-flash, gemini-2.5-flash):",
+        currentModel
+      );
+      if (newModel && newModel.trim()) {
+        const cleaned = newModel.trim().toLowerCase().replace(/\s+/g, "-");
+        localStorage.setItem("mf_gemini_model", cleaned);
+      }
       sessionStorage.removeItem("mf_resolved_gemini_model");
-      alert("✅ Gemini API Key saved. You can now click '⚡ Run Gemini AI'.");
+      alert("✅ Saved! Model set to " + getSavedGeminiModel() + ". You can now click '⚡ Run Gemini AI'.");
     } else {
       localStorage.removeItem("mf_gemini_api_key");
       sessionStorage.removeItem("mf_resolved_gemini_model");
@@ -926,15 +945,20 @@ async function resolveGeminiModel(apiKey) {
   const cachedModel = sessionStorage.getItem("mf_resolved_gemini_model");
   if (cachedModel) return cachedModel;
 
+  const userModel = getSavedGeminiModel();
   const candidateModels = [
+    userModel,
+    "gemini-3.1-pro",
+    "gemini-3.1-flash",
+    "gemini-3-pro",
+    "gemini-3-flash",
+    "gemini-2.5-pro",
     "gemini-2.5-flash",
     "gemini-2.0-flash",
     "gemini-2.0-flash-exp",
     "gemini-1.5-flash",
-    "gemini-1.5-flash-latest",
-    "gemini-1.5-pro",
-    "gemini-pro"
-  ];
+    "gemini-1.5-pro"
+  ].filter((m, i, arr) => m && arr.indexOf(m) === i);
 
   try {
     const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
@@ -944,6 +968,7 @@ async function resolveGeminiModel(apiKey) {
         .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
         .map((m) => m.name.replace("models/", ""));
 
+      // Check if user's configured model or any candidate is available
       for (const cand of candidateModels) {
         if (available.includes(cand)) {
           sessionStorage.setItem("mf_resolved_gemini_model", cand);
@@ -951,10 +976,11 @@ async function resolveGeminiModel(apiKey) {
         }
       }
 
-      const anyFlash = available.find((m) => m.includes("flash"));
-      if (anyFlash) {
-        sessionStorage.setItem("mf_resolved_gemini_model", anyFlash);
-        return anyFlash;
+      // Check for any 3.x, 2.x, or flash model
+      const anyModern = available.find((m) => m.includes("gemini-3") || m.includes("gemini-2") || m.includes("flash"));
+      if (anyModern) {
+        sessionStorage.setItem("mf_resolved_gemini_model", anyModern);
+        return anyModern;
       }
 
       if (available.length > 0) {
@@ -966,7 +992,7 @@ async function resolveGeminiModel(apiKey) {
     console.warn("Unable to query ListModels, falling back to candidates", e);
   }
 
-  return "gemini-1.5-flash";
+  return userModel;
 }
 
 // Live Dynamic AI Summary Generator via Google Gemini API
@@ -976,15 +1002,24 @@ async function generateLiveGeminiSummary(schemeCode) {
 
   let apiKey = localStorage.getItem("mf_gemini_api_key");
   if (!apiKey) {
-    apiKey = prompt("Enter your Google Gemini API Key (stored locally in browser only for dynamic AI generation):\nGet a free key at: https://aistudio.google.com/");
+    apiKey = prompt("Enter your Google Gemini API Key:\n(Get a free key at: https://aistudio.google.com/)");
     if (!apiKey || !apiKey.trim()) return;
     apiKey = apiKey.trim();
     localStorage.setItem("mf_gemini_api_key", apiKey);
+
+    const modelChoice = prompt(
+      "Enter your Gemini Model Name (Default: gemini-3.1-pro):",
+      "gemini-3.1-pro"
+    );
+    if (modelChoice && modelChoice.trim()) {
+      localStorage.setItem("mf_gemini_model", modelChoice.trim().toLowerCase().replace(/\s+/g, "-"));
+    }
   }
 
   const badgeEl = document.getElementById("drawer-summary-badge");
   const bodyEl = document.getElementById("drawer-summary-body");
   const btnEl = document.getElementById("btn-ai-regenerate");
+  const activeModel = getSavedGeminiModel();
 
   if (btnEl) btnEl.disabled = true;
   if (badgeEl) {
@@ -994,7 +1029,7 @@ async function generateLiveGeminiSummary(schemeCode) {
   if (bodyEl) {
     bodyEl.innerHTML = `
       <div style="padding: 20px; text-align: center; color: #38bdf8; font-size: 13px;">
-        <span style="display:inline-block; animation: pulse 1s infinite;">✨</span> Calling Google Gemini for live quantitative insights...
+        <span style="display:inline-block; animation: pulse 1s infinite;">✨</span> Calling Google Gemini (${escapeHtml(activeModel)}) for live quantitative insights...
       </div>
     `;
   }
@@ -1036,17 +1071,20 @@ ${JSON.stringify({
     // Resolve model or try candidates sequentially to prevent 404
     const resolvedModel = await resolveGeminiModel(apiKey);
     const candidateModels = [
+      activeModel,
       resolvedModel,
+      "gemini-3.1-pro",
+      "gemini-3.1-flash",
+      "gemini-3-pro",
+      "gemini-3-flash",
+      "gemini-2.5-pro",
       "gemini-2.5-flash",
       "gemini-2.0-flash",
-      "gemini-2.0-flash-exp",
-      "gemini-1.5-flash",
-      "gemini-1.5-flash-latest",
-      "gemini-pro"
-    ].filter((m, i, arr) => arr.indexOf(m) === i);
+      "gemini-1.5-flash"
+    ].filter((m, i, arr) => m && arr.indexOf(m) === i);
 
     let successData = null;
-    let usedModel = resolvedModel;
+    let usedModel = activeModel;
     let lastError = null;
 
     for (const model of candidateModels) {
