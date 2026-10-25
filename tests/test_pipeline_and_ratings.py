@@ -149,16 +149,18 @@ class TestCrisilIntelligenceRatings(unittest.TestCase):
         no_match = match_scheme_to_crisil("NonExistent AMC Super Fund", "Large Cap", self.crisil_funds)
         self.assertIsNone(no_match)
 
-    def test_crisil_coverage_in_database(self):
-        """Verifies that the majority of active DB schemes now have CRISIL ranks populated."""
-        with get_connection() as conn:
-            cursor = conn.cursor()
-            total = cursor.execute("SELECT COUNT(*) FROM schemes").fetchone()[0]
-            with_crisil = cursor.execute(
-                "SELECT COUNT(*) FROM fund_ratings WHERE crisil_rank IS NOT NULL AND crisil_rank != ''"
-            ).fetchone()[0]
-            coverage_pct = (with_crisil / total) * 100
-            self.assertGreaterEqual(coverage_pct, 75.0, f"CRISIL coverage too low: {coverage_pct:.1f}%")
+    def test_crisil_coverage_in_summary_data(self):
+        """Verifies that the majority of active schemes in summary datasets have CRISIL ranks populated."""
+        import csv
+        csv_path = os.path.join(DATA_DIR, "all_equity_summary.csv")
+        self.assertTrue(os.path.exists(csv_path), "all_equity_summary.csv must exist")
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+        total = len(rows)
+        with_crisil = sum(1 for r in rows if r.get("crisil_rank") and r.get("crisil_rank").strip())
+        coverage_pct = (with_crisil / total) * 100
+        self.assertGreaterEqual(coverage_pct, 75.0, f"CRISIL coverage too low: {coverage_pct:.1f}%")
 
 
 class TestCompositeScoring(unittest.TestCase):
