@@ -12,6 +12,7 @@ import os
 import subprocess
 import glob
 import urllib.request
+import urllib.parse
 import json
 import sqlite3
 import re
@@ -22,6 +23,14 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (MutualFundResearchBot/2.0)"}
 ONE_FINANCE_EQUITY_URL = "https://onehub.1finance.co.in/scoring-ranking/mutual-funds/v2/schemes?type=Equity&page={page}&limit=100"
 MC_MAP_URL = "https://api.moneycontrol.com/swiftapi/v1/mutualfunds/getMcMfMapping?searchKey=ISIN&value={isin}&responseType=json"
 MC_PAGE_URL = "https://www.moneycontrol.com/mutual-funds/nav/{slug}"
+
+CRISIL_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Referer": "https://intelligence.crisil.com/en/homepage/what-we-do/research/investment-research-product/mutual-fund-research/mutual-fund-ranking.html",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "X-Requested-With": "XMLHttpRequest",
+}
+CRISIL_RANKING_URL = "https://intelligence.crisil.com/content/intelligence/en/homepage/what-we-do/research/investment-research-product/mutual-fund-research/mutual-fund-ranking/_jcr_content/content_par/columncontrol_128464/col-100-1-wp/box/col-100-1/tabs_copy/1/mf_rating.mfRating.json"
 
 # Multi-Category Authoritative Ratings Map (VR Stars, CRISIL Rank, Morningstar Medalist)
 VR_CRISIL_MEDALIST_MAP = {
@@ -157,6 +166,92 @@ def fetch_morningstar_rating_via_mc(isin: str) -> Optional[int]:
     except Exception:
         pass
     return None
+
+
+def fetch_crisil_rankings(
+    inv_type: str = "Equity",
+    plan_name: str = "Direct Plan",
+    cache_path: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Fetches real-time official CRISIL Mutual Fund Rankings (CMFR) directly from
+    CRISIL's research intelligence platform (intelligence.crisil.com).
+    Returns list of scheme rating objects from CRISIL's interactive dataset.
+    """
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if cache_path is None:
+        cache_path = os.path.join(repo_root, "data", "crisil_rankings.json")
+
+    params = {
+        "invType": inv_type,
+        "limit": "1000",
+        "planName": plan_name,
+    }
+    url = f"{CRISIL_RANKING_URL}?{urllib.parse.urlencode(params)}"
+    print(f"[CRISIL] Fetching live CMFR rankings from intelligence.crisil.com ({inv_type} - {plan_name})...")
+
+    try:
+        req = urllib.request.Request(url, headers=CRISIL_HEADERS)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            docs = data.get("docs", [])
+            if docs:
+                os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                with open(cache_path, "w", encoding="utf-8") as f:
+                    json.dump({
+                        "source": "intelligence.crisil.com",
+                        "inv_type": inv_type,
+                        "plan_name": plan_name,
+                        "total_funds": len(docs),
+                        "cpr_date": docs[0].get("cprDate") if docs else None,
+                        "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                        "docs": docs,
+                    }, f, indent=2)
+                print(f"[CRISIL] Successfully fetched {len(docs)} funds; cached to {cache_path}.")
+                return docs
+    except Exception as e:
+        print(f"[Warning] CRISIL live fetch failed: {e}. Attempting cache fallback...")
+
+    # Fallback to local cache if available
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                cached_docs = data.get("docs", [])
+                if cached_docs:
+                    print(f"[CRISIL] Loaded {len(cached_docs)} funds from cache: {cache_path}")
+                    return cached_docs
+        except Exception as ce:
+            print(f"[Warning] Failed reading CRISIL cache: {ce}")
+
+    return []
+
+
+def get_or_load_crisil_rankings(
+    cache_path: Optional[str] = None,
+    force_refresh: bool = False
+) -> List[Dict[str, Any]]:
+    """
+    Returns CRISIL rankings from cache or fetches live from intelligence.crisil.com.
+    """
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if cache_path is None:
+        cache_path = os.path.join(repo_root, "data", "crisil_rankings.json")
+
+    # If cache exists and is fresh (< 7 days) and force_refresh is False, load it
+    if not force_refresh and os.path.exists(cache_path):
+        try:
+            mtime = os.path.getmtime(cache_path)
+            if (time.time() - mtime) < 7 * 86400:
+                with open(cache_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    docs = data.get("docs", [])
+                    if docs:
+                        return docs
+        except Exception:
+            pass
+
+    return fetch_crisil_rankings(cache_path=cache_path)
 
 
 def compute_advisorkhoj_category_volatility_rankings(
@@ -570,4 +665,82 @@ def match_scheme_to_vr_pdf(
         return best_match
 
     return None
+
+
+CRISIL_CAT_ALIASES = {
+    "Large Cap": ["Large Cap Fund"],
+    "Mid Cap": ["Mid Cap Fund"],
+    "Small Cap": ["Small Cap Fund"],
+    "Flexi Cap": ["Flexi Cap Fund"],
+    "Multi Cap": ["Multi Cap Fund"],
+    "Large & Mid Cap": ["Large and Mid Cap Fund", "Large & Mid Cap Fund"],
+    "ELSS": ["ELSS"],
+    "Focused Fund": ["Focused Fund"],
+    "Value & Contra": ["Value/Contra Fund", "Value Fund", "Contra Fund"],
+    "Dividend Yield": ["Dividend Yield Fund", "Thematic-Dividend Yield"],
+}
+
+
+def match_scheme_to_crisil(
+    scheme_name: str,
+    category: str,
+    crisil_funds: List[Dict[str, Any]]
+) -> Optional[Dict[str, Any]]:
+    """
+    Matches an AMFI/database mutual fund scheme to its official CRISIL Mutual Fund Ranking record.
+    Uses AMC strict verification and category token scoring.
+    """
+    if not crisil_funds:
+        return None
+
+    db_amc = extract_amc(scheme_name)
+    candidates = []
+    for f in crisil_funds:
+        c_amc = extract_amc((f.get("fundName") or "") + " " + (f.get("displayName") or ""))
+        if db_amc == c_amc and db_amc != "unknown":
+            candidates.append(f)
+
+    if not candidates:
+        return None
+
+    db_clean = clean_fund_tokens(scheme_name)
+    db_words = set(db_clean.split())
+    preferred_cats = CRISIL_CAT_ALIASES.get(category, [category])
+
+    best_match = None
+    best_score = 0.0
+
+    for cand in candidates:
+        c_name = cand.get("displayName") or cand.get("schemeName") or ""
+        cand_clean = clean_fund_tokens(c_name)
+        cand_words = set(cand_clean.split())
+        inter = db_words.intersection(cand_words)
+        if not inter:
+            continue
+
+        score = len(inter) / max(len(db_words), len(cand_words))
+
+        # Category bonus
+        if cand.get("categoryName") in preferred_cats:
+            score += 0.25
+
+        if score > best_score:
+            best_score = score
+            best_match = cand
+
+    if best_match and best_score >= 0.40:
+        raw_rank = best_match.get("crisilCprRanking")
+        formatted_rank = f"Rank {raw_rank}" if raw_rank else None
+        return {
+            "crisil_rank": formatted_rank,
+            "raw_rank": raw_rank,
+            "cpr_date": best_match.get("cprDate"),
+            "display_name": best_match.get("displayName"),
+            "fund_name": best_match.get("fundName"),
+            "crisil_category": best_match.get("categoryName"),
+            "index_name": best_match.get("indexName"),
+        }
+
+    return None
+
 

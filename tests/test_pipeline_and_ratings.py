@@ -35,6 +35,9 @@ from ratings import (
     match_scheme_to_vr_pdf,
     compute_composite_rating,
     compute_advisorkhoj_category_volatility_rankings,
+    get_or_load_crisil_rankings,
+    match_scheme_to_crisil,
+    fetch_crisil_rankings,
 )
 from storage import get_connection, init_db, save_fund_ratings, DB_PATH, MASTER_EXCEL_PATH
 
@@ -110,6 +113,52 @@ class TestValueResearchPdfParser(unittest.TestCase):
         # Ensure no cross-AMC match: unknown AMC should not match ABSL or HDFC
         unknown_match = match_scheme_to_vr_pdf("NonExistent AMC Super Fund", "Large Cap", self.pdf_funds)
         self.assertIsNone(unknown_match)
+
+
+class TestCrisilIntelligenceRatings(unittest.TestCase):
+    """Tests for CRISIL Mutual Fund Rankings (CMFR) ingestion, live fetching, and matching."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.crisil_funds = get_or_load_crisil_rankings()
+
+    def test_crisil_rankings_loaded(self):
+        """Verifies that CRISIL rankings dataset contains valid scheme entries."""
+        self.assertGreaterEqual(len(self.crisil_funds), 250, "Should load at least 250 CRISIL ranked funds")
+        first = self.crisil_funds[0]
+        self.assertIn("crisilCprRanking", first)
+        self.assertIn("categoryName", first)
+        self.assertIn("displayName", first)
+
+    def test_crisil_rank_values(self):
+        """Verifies that rank values are between 1 and 5."""
+        ranks = {f.get("crisilCprRanking") for f in self.crisil_funds if f.get("crisilCprRanking")}
+        self.assertTrue(ranks.issubset({"1", "2", "3", "4", "5"}), f"Invalid CRISIL ranks: {ranks}")
+
+    def test_crisil_scheme_matching(self):
+        """Verifies matching accuracy for prominent equity funds with CRISIL rankings."""
+        match_ppfc = match_scheme_to_crisil("Parag Parikh Flexi Cap Fund", "Flexi Cap", self.crisil_funds)
+        self.assertIsNotNone(match_ppfc)
+        self.assertIn("Rank", match_ppfc.get("crisil_rank", ""))
+
+        match_sbi = match_scheme_to_crisil("SBI Focused Fund", "Focused Fund", self.crisil_funds)
+        self.assertIsNotNone(match_sbi)
+        self.assertEqual(match_sbi.get("crisil_rank"), "Rank 1")
+
+        # Unknown AMC should not match
+        no_match = match_scheme_to_crisil("NonExistent AMC Super Fund", "Large Cap", self.crisil_funds)
+        self.assertIsNone(no_match)
+
+    def test_crisil_coverage_in_database(self):
+        """Verifies that the majority of active DB schemes now have CRISIL ranks populated."""
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            total = cursor.execute("SELECT COUNT(*) FROM schemes").fetchone()[0]
+            with_crisil = cursor.execute(
+                "SELECT COUNT(*) FROM fund_ratings WHERE crisil_rank IS NOT NULL AND crisil_rank != ''"
+            ).fetchone()[0]
+            coverage_pct = (with_crisil / total) * 100
+            self.assertGreaterEqual(coverage_pct, 75.0, f"CRISIL coverage too low: {coverage_pct:.1f}%")
 
 
 class TestCompositeScoring(unittest.TestCase):

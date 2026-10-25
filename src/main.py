@@ -53,6 +53,8 @@ from ratings import (
     VR_CRISIL_MEDALIST_MAP,
     get_or_load_vr_pdf_ratings,
     match_scheme_to_vr_pdf,
+    get_or_load_crisil_rankings,
+    match_scheme_to_crisil,
 )
 
 DIVERSIFIED_EQUITY_CATEGORIES = [
@@ -182,6 +184,10 @@ def run_full_equity_pipeline(categories=None, limit_per_cat=0, plan_filter="Dire
     pdf_ratings = get_or_load_vr_pdf_ratings()
     print(f"Loaded Value Research Scoreboard records ({len(pdf_ratings)} funds from reference PDF).")
 
+    # Ingest CRISIL official CMFR rankings from intelligence.crisil.com
+    crisil_ratings = get_or_load_crisil_rankings()
+    print(f"Loaded CRISIL CMFR records ({len(crisil_ratings)} funds from CRISIL Intelligence).")
+
     # Ingest ratings per category and rank BEST to WORST
     for cat in categories:
         cat_funds = [s for s in selected_schemes if s["category"] == cat]
@@ -210,14 +216,18 @@ def run_full_equity_pipeline(categories=None, limit_per_cat=0, plan_filter="Dire
                 vr_risk_grade = vr_match.get("risk_grade")
                 vr_avg_rating = vr_match.get("avg_rating")
 
-            # Fallback to hardcoded map if not matched in PDF
-            crisil_rank = None
+            # Match with CRISIL official rankings
+            crisil_match = match_scheme_to_crisil(name, cat, crisil_ratings)
+            crisil_rank = crisil_match.get("crisil_rank") if crisil_match else None
+
+            # Fallback to curated map if not matched
             ms_medalist = None
             if isin in VR_CRISIL_MEDALIST_MAP:
                 map_vr, map_cr, map_med = VR_CRISIL_MEDALIST_MAP[isin]
                 if vr_rating is None:
                     vr_rating = map_vr
-                crisil_rank = map_cr
+                if crisil_rank is None:
+                    crisil_rank = map_cr
                 ms_medalist = map_med
 
             ms_star = fetch_morningstar_rating_via_mc(isin)
@@ -269,6 +279,8 @@ def update_ratings_from_pdf(categories=None):
     init_db()
     pdf_ratings = get_or_load_vr_pdf_ratings()
     print(f"Loaded Value Research Scoreboard records ({len(pdf_ratings)} funds parsed from reference PDF).")
+    crisil_ratings = get_or_load_crisil_rankings()
+    print(f"Loaded CRISIL CMFR records ({len(crisil_ratings)} funds from CRISIL Intelligence).")
 
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
@@ -329,8 +341,15 @@ def update_ratings_from_pdf(categories=None):
                 vr_risk_grade = vr_match.get("risk_grade")
                 vr_avg_rating = vr_match.get("avg_rating")
 
-            # Fallback
-            crisil_rank = s["crisil_rank"]
+            # Match with CRISIL official rankings
+            crisil_match = match_scheme_to_crisil(name, cat, crisil_ratings)
+            crisil_rank = None
+            if crisil_match:
+                crisil_rank = crisil_match.get("crisil_rank")
+            else:
+                crisil_rank = s["crisil_rank"]
+
+            # Fallback to curated map
             ms_medalist = s["morningstar_medalist"]
             if isin in VR_CRISIL_MEDALIST_MAP:
                 map_vr, map_cr, map_med = VR_CRISIL_MEDALIST_MAP[isin]

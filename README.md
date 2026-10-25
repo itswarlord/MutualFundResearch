@@ -44,7 +44,7 @@ Each category is also exported as an individual, clean CSV file, sorted with **"
 ---
 
 ## 🏆 Category Leaderboard Snapshots (BEST to WORST)
-*Synthesized using multi-agency ratings including official **Value Research Scoreboard (Pages 85–111 in reference PDF)**, Morningstar, CRISIL, 1 Finance, and Advisorkhoj.*
+*Synthesized using multi-agency ratings including official **Value Research Scoreboard (Pages 85–111 in reference PDF)**, **CRISIL Mutual Fund Rankings (CMFR)** live from CRISIL Research Intelligence (`intelligence.crisil.com`), Morningstar, 1 Finance, and Advisorkhoj.*
 
 ### 1. Flexi Cap Funds (Top 5)
 | Rank | Scheme Name | Tier & Score | 3Y CAGR | Std Dev | Sharpe | Beta | Alpha | Capture Ratio | VR Rating | Live AUM (₹ Cr) |
