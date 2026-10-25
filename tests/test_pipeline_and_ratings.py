@@ -680,6 +680,107 @@ class TestCategoryBenchmarkAlignment(unittest.TestCase):
             self.assertIn("TRI", self.js)
 
 
+class TestGeminiAISummarizer(unittest.TestCase):
+    """Tests the automated AI summarizer integrating Google Gemini 2.0 Flash."""
+
+    def setUp(self):
+        self.sample_fund = {
+            "scheme_code": 147666,
+            "scheme_name": "Axis Bluechip Fund",
+            "amc": "Axis Mutual Fund",
+            "category": "Large Cap",
+            "benchmark_name": "NIFTY 100 TRI",
+            "composite_rank": 3,
+            "composite_score": 84.5,
+            "rating_tier": "BEST (Tier 1 - Elite)",
+            "return_1y": 24.2,
+            "return_3y_cagr": 16.8,
+            "standard_deviation": 12.1,
+            "beta": 0.88,
+            "alpha": 3.4,
+            "sharpe_ratio": 0.95,
+            "sortino_ratio": 1.35,
+            "upside_capture": 96.0,
+            "downside_capture": 82.0,
+            "capture_ratio": 1.17,
+            "direct_ter": 0.72,
+            "aum_cr": 32000.0,
+            "as_of_date": "2026-10-23",
+            "latest_nav": 58.4,
+        }
+
+    def test_build_prompt_payload(self):
+        """Verifies structured prompt payload creation for Gemini API."""
+        from ai_summarizer import build_prompt_payload, DEFAULT_MODEL
+        payload = build_prompt_payload(self.sample_fund)
+        self.assertIn("contents", payload)
+        self.assertIn("generationConfig", payload)
+        self.assertEqual(payload["generationConfig"]["responseMimeType"], "application/json")
+        self.assertEqual(DEFAULT_MODEL, "gemini-2.0-flash")
+
+        # Check prompt text contains fund details
+        prompt_text = payload["contents"][0]["parts"][0]["text"]
+        self.assertIn("Axis Bluechip Fund", prompt_text)
+        self.assertIn("NIFTY 100 TRI", prompt_text)
+        self.assertIn("EXACTLY 5 or 6", prompt_text)
+
+    def test_cache_key_generation(self):
+        """Verifies deterministic cache key generation."""
+        from ai_summarizer import get_fund_cache_key
+        key = get_fund_cache_key(self.sample_fund)
+        self.assertIn("147666", key)
+        self.assertIn("2026-10-23", key)
+
+    def test_fallback_when_no_api_key(self):
+        """Verifies graceful fallback to deterministic quantitative lines when no API key is provided."""
+        from ai_summarizer import get_fund_summary
+        res = get_fund_summary(self.sample_fund, api_key=None, use_cache=False)
+        self.assertEqual(res["source"], "quantitative-fallback")
+        lines = res["summary_lines"]
+        self.assertEqual(len(lines), 6)
+        self.assertIn("Axis Bluechip Fund", lines[0])
+
+    def test_cached_summary_retrieval(self):
+        """Verifies cached entries are retrieved without calling API."""
+        from ai_summarizer import get_fund_summary, get_fund_cache_key
+        mock_cache = {
+            get_fund_cache_key(self.sample_fund): {
+                "summary_lines": [
+                    "AI line 1: Mandate analysis.",
+                    "AI line 2: Rank #3 evaluation.",
+                    "AI line 3: Historical returns.",
+                    "AI line 4: Volatility and beta metrics.",
+                    "AI line 5: Benchmark alpha participation.",
+                    "AI line 6: Ratings matrix and direct cost."
+                ],
+                "source": "gemini-2.0-flash"
+            }
+        }
+        res = get_fund_summary(self.sample_fund, api_key="fake-key", cache=mock_cache, use_cache=True)
+        self.assertEqual(res["source"], "gemini-2.0-flash")
+        self.assertEqual(len(res["summary_lines"]), 6)
+        self.assertIn("AI line 1", res["summary_lines"][0])
+
+    def test_batch_generate_ai_summaries(self):
+        """Verifies batch generation handles lists of funds with caching."""
+        from ai_summarizer import batch_generate_ai_summaries
+        funds = [dict(self.sample_fund)]
+        res = batch_generate_ai_summaries(funds, api_key=None)
+        self.assertEqual(len(res), 1)
+        self.assertIn("summary_lines", res[0])
+        self.assertEqual(len(res[0]["summary_lines"]), 6)
+        self.assertIn("summary_source", res[0])
+
+    def test_frontend_live_ai_button_and_handler(self):
+        """Verifies web/app.js contains live Gemini generation logic."""
+        with open(os.path.join(WEB_DIR, "app.js"), "r", encoding="utf-8") as f:
+            js = f.read()
+        self.assertIn("generateLiveGeminiSummary", js)
+        self.assertIn("gemini-2.0-flash", js)
+        self.assertIn("btn-generate-ai", js)
+        self.assertIn("ai-badge", js)
+
+
 if __name__ == "__main__":
     unittest.main()
 

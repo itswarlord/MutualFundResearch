@@ -579,11 +579,16 @@ def export_all_equity_data(db_path: str = DB_PATH):
                 "benchmark_proxy": b_info["name"]
             })
 
-        # Attach 5-6 line quantitative summary to each mutual fund for detail modal
-        for f in all_data:
-            s_lines = generate_fund_summary_lines(f)
-            f["summary_lines"] = s_lines
-            f["summary"] = "\n".join(s_lines)
+        # Attach 5-6 line dynamic AI summary to each mutual fund for detail modal
+        try:
+            from ai_summarizer import batch_generate_ai_summaries
+            batch_generate_ai_summaries(all_data)
+        except Exception:
+            for f in all_data:
+                s_lines = generate_fund_summary_lines(f)
+                f["summary_lines"] = s_lines
+                f["summary"] = "\n".join(s_lines)
+                f["summary_source"] = "quantitative-fallback"
 
         web_payload = {
             "updated_at": datetime.date.today().isoformat(),

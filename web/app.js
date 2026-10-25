@@ -561,14 +561,22 @@ function openFundDrawer(schemeCode) {
     })
     .join("");
 
+  const isAi = fund.summary_source && fund.summary_source.includes("gemini");
+  const badgeText = isAi ? "✨ Gemini 2.0 Flash AI" : "Quantitative Analysis";
+
   content.innerHTML = `
     <!-- Fund Executive Summary Card (5-6 Lines) -->
-    <div class="drawer-card fund-summary-card">
+    <div class="drawer-card fund-summary-card" id="drawer-summary-card">
       <div class="drawer-card-title">
-        <span>Fund Executive Summary</span>
-        <span class="summary-badge">${summaryLines.length} Core Insights</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span>Fund Executive Summary</span>
+          <span class="summary-badge ${isAi ? "ai-badge" : ""}" id="drawer-summary-badge">${badgeText}</span>
+        </div>
+        <button class="btn-generate-ai" id="btn-ai-regenerate" onclick="generateLiveGeminiSummary(${fund.scheme_code})" title="Generate dynamic live AI insights using Google Gemini 2.0 Flash">
+          ⚡ Run Gemini AI
+        </button>
       </div>
-      <div class="fund-summary-body">
+      <div class="fund-summary-body" id="drawer-summary-body">
         ${summaryHtml}
       </div>
     </div>
@@ -886,3 +894,134 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+
+// Live Dynamic AI Summary Generator via Google Gemini 2.0 Flash
+async function generateLiveGeminiSummary(schemeCode) {
+  const fund = state.rawFunds.find((f) => f.scheme_code === schemeCode);
+  if (!fund) return;
+
+  let apiKey = localStorage.getItem("mf_gemini_api_key");
+  if (!apiKey) {
+    apiKey = prompt("Enter your Google Gemini API Key (stored locally in browser only for dynamic AI generation):");
+    if (!apiKey || !apiKey.trim()) return;
+    apiKey = apiKey.trim();
+    localStorage.setItem("mf_gemini_api_key", apiKey);
+  }
+
+  const badgeEl = document.getElementById("drawer-summary-badge");
+  const bodyEl = document.getElementById("drawer-summary-body");
+  const btnEl = document.getElementById("btn-ai-regenerate");
+
+  if (btnEl) btnEl.disabled = true;
+  if (badgeEl) {
+    badgeEl.textContent = "✨ Generating...";
+    badgeEl.classList.add("ai-badge");
+  }
+  if (bodyEl) {
+    bodyEl.innerHTML = `
+      <div style="padding: 20px; text-align: center; color: #38bdf8; font-size: 13px;">
+        <span style="display:inline-block; animation: pulse 1s infinite;">✨</span> Calling Google Gemini 2.0 Flash for live quantitative insights...
+      </div>
+    `;
+  }
+
+  try {
+    const promptText = `You are a Senior Quantitative Mutual Fund Research Analyst specializing in Indian equity mutual funds (SEBI framework).
+Analyze the provided fund metrics and produce EXACTLY 5 or 6 concise, data-driven, institutional research summary lines.
+Ground every line in the metrics provided. Do not mention regular plan expense ratios, commissions, or distributor fees.
+Output format: Strict JSON with key "summary_lines" containing an array of 5 or 6 strings.
+
+Fund Metrics:
+${JSON.stringify({
+  scheme_name: fund.scheme_name,
+  amc: fund.amc,
+  category: fund.category,
+  benchmark: fund.benchmark_name,
+  rank: fund.composite_rank,
+  score: fund.composite_score,
+  tier: fund.rating_tier,
+  return_3y: fund.return_3y_cagr,
+  return_1y: fund.return_1y,
+  volatility: fund.standard_deviation,
+  beta: fund.beta,
+  alpha: fund.alpha,
+  sharpe: fund.sharpe_ratio,
+  sortino: fund.sortino_ratio,
+  upside_capture: fund.upside_capture,
+  downside_capture: fund.downside_capture,
+  ratings: {
+    ms: fund.morningstar_rating,
+    vr: fund.valueresearch_rating,
+    crisil: fund.crisil_rank,
+    of: fund.one_finance_score
+  },
+  direct_ter: fund.direct_ter,
+  aum_cr: fund.aum_cr
+}, null, 2)}`;
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: promptText }] }],
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json"
+        }
+      })
+    });
+
+    if (!resp.ok) {
+      if (resp.status === 400 || resp.status === 403) {
+        localStorage.removeItem("mf_gemini_api_key");
+        throw new Error("Invalid Gemini API Key. Please verify your key at https://aistudio.google.com/");
+      }
+      throw new Error(`Gemini API returned status ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const parsed = JSON.parse(candidateText);
+    const lines = parsed.summary_lines;
+
+    if (Array.isArray(lines) && lines.length >= 5) {
+      fund.summary_lines = lines;
+      fund.summary = lines.join("\n");
+      fund.summary_source = "gemini-2.0-flash";
+
+      if (badgeEl) {
+        badgeEl.textContent = "✨ Live Gemini 2.0 Flash";
+        badgeEl.classList.add("ai-badge");
+      }
+      if (bodyEl) {
+        bodyEl.innerHTML = lines.map((l, i) => `
+          <div class="summary-line-item">
+            <span class="summary-line-num">${i + 1}</span>
+            <div class="summary-line-text">${escapeHtml(l)}</div>
+          </div>
+        `).join("");
+      }
+    } else {
+      throw new Error("Invalid format received from Gemini model.");
+    }
+  } catch (err) {
+    alert("Gemini AI Generation Notice: " + err.message);
+    const defaultLines = getFundSummaryLines(fund);
+    if (bodyEl) {
+      bodyEl.innerHTML = defaultLines.map((l, i) => `
+        <div class="summary-line-item">
+          <span class="summary-line-num">${i + 1}</span>
+          <div class="summary-line-text">${escapeHtml(l)}</div>
+        </div>
+      `).join("");
+    }
+    if (badgeEl) {
+      badgeEl.textContent = `${defaultLines.length} Core Insights`;
+      badgeEl.classList.remove("ai-badge");
+    }
+  } finally {
+    if (btnEl) btnEl.disabled = false;
+  }
+}
+
