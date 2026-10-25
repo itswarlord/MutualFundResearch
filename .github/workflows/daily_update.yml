@@ -1,0 +1,64 @@
+name: Daily Indian Equity Mutual Fund Sync
+
+on:
+  schedule:
+    # Run weekdays at 18:00 UTC (23:30 IST, after AMFI publishes daily closing NAVs)
+    - cron: '0 18 * * 1-5'
+  workflow_dispatch: # Allows on-demand manual trigger from GitHub UI
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: false
+
+jobs:
+  sync-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Full Equity Pipeline
+        run: |
+          python3 src/main.py --sync
+
+      - name: Commit and Push Updated Datasets & Web JSON
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add data/ web/data/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: Daily Equity NAVs, Benchmarks & Ratings [$(date -u +'%Y-%m-%d')]" && git push)
+
+  deploy-pages:
+    needs: sync-data
+    if: always()
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'web'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

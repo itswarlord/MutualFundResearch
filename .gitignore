@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# SQLite Database (generated locally and rebuilt in CI runners)
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# Log files
+*.log
+data/*.log
+
+# LibreOffice / Excel lock files
+.~lock.*
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db

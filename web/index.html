@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Indian Equity Mutual Funds Research | Multi-Agency Ratings & SEBI Benchmark Analytics</title>
+  <meta name="description" content="Institutional-grade quantitative research, CAPM analytics, and multi-agency ratings (Morningstar, Value Research, CRISIL, 1 Finance, Advisorkhoj) for all Indian Equity Mutual Funds.">
+  
+  <!-- Google Fonts: Plus Jakarta Sans & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header class="navbar" id="main-navbar">
+    <div class="nav-container">
+      <div class="brand">
+        <div class="brand-icon">🇮🇳</div>
+        <div class="brand-text">
+          <span class="brand-title">MF Research India</span>
+          <span class="brand-subtitle">SEBI Benchmark & Multi-Agency Analytics</span>
+        </div>
+      </div>
+      <div class="nav-actions">
+        <button id="btn-hosting-eval" class="nav-btn secondary-btn" title="View Online Hosting Evaluation">
+          🌐 Online Hosting Guide
+        </button>
+        <button id="btn-methodology" class="nav-btn secondary-btn" title="View Rating & CAPM Methodology">
+          📐 Methodology
+        </button>
+        <a href="data/Indian_Equity_Mutual_Funds_Master.xlsx" id="btn-download-master-excel" class="nav-btn primary-btn" download="Indian_Equity_Mutual_Funds_Master.xlsx">
+          <span class="btn-icon">📊</span> Download Master Excel (.xlsx)
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero & KPI Stats Bar -->
+  <section class="hero-section" id="hero-section">
+    <div class="hero-content">
+      <div class="badge-pill">
+        <span class="pulse-dot"></span>
+        <span>SEBI Tier 1 Categorization & Daily Ingestion</span>
+      </div>
+      <h1 class="hero-title">Indian Equity Mutual Funds Intelligence</h1>
+      <p class="hero-desc">
+        Comprehensive repository tracking <strong>320+ schemes</strong> across all 10 diversified equity categories.
+        Every category is benchmarked against its designated SEBI Tier 1 index with <strong>Beta, Jensen's Alpha, Sharpe, Sortino & Capture Ratios</strong> synthesized across 5 rating agencies.
+      </p>
+    </div>
+
+    <!-- Live Metric Cards -->
+    <div class="kpi-grid">
+      <div class="kpi-card" id="kpi-total-funds">
+        <div class="kpi-label">TOTAL EQUITY FUNDS</div>
+        <div class="kpi-value" id="stat-funds-count">323</div>
+        <div class="kpi-subtext">Direct Growth Schemes</div>
+      </div>
+      <div class="kpi-card" id="kpi-total-aum">
+        <div class="kpi-label">TRACKED INDUSTRY AUM</div>
+        <div class="kpi-value" id="stat-total-aum">₹31.3 Lakh Cr</div>
+        <div class="kpi-subtext">Live Portfolio Value</div>
+      </div>
+      <div class="kpi-card" id="kpi-categories">
+        <div class="kpi-label">EQUITY CATEGORIES</div>
+        <div class="kpi-value" id="stat-categories-count">10</div>
+        <div class="kpi-subtext">SEBI Mandated Classes</div>
+      </div>
+      <div class="kpi-card" id="kpi-ratings">
+        <div class="kpi-label">RATINGS ENGINES</div>
+        <div class="kpi-value">5 Agencies</div>
+        <div class="kpi-subtext">MS • VR • CRISIL • 1F • ADV</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Container -->
+  <main class="main-container">
+
+    <!-- Category Tabs Navigation -->
+    <div class="category-tabs-wrapper">
+      <div class="category-tabs-header">
+        <span class="tabs-label">Select Equity Category:</span>
+        <div class="benchmark-info-badge" id="active-benchmark-badge">
+          <span class="benchmark-tag">BENCHMARK</span>
+          <span class="benchmark-name" id="benchmark-display-name">NIFTY 500 TRI</span>
+        </div>
+      </div>
+      <div class="category-tabs-scroll" id="category-tabs-container">
+        <!-- Rendered dynamically via JavaScript -->
+      </div>
+    </div>
+
+    <!-- Active Category Banner & Stats -->
+    <div class="active-category-banner" id="category-summary-banner">
+      <div class="cat-banner-left">
+        <h2 class="cat-title" id="cat-banner-title">Flexi Cap Mutual Funds</h2>
+        <p class="cat-desc" id="cat-banner-desc">
+          Minimum 65% in Indian equities across Large, Mid, and Small Cap stocks dynamically allocated by the fund manager.
+        </p>
+      </div>
+      <div class="cat-banner-right">
+        <div class="benchmark-chip">
+          <span class="chip-label">SEBI Designated Benchmark:</span>
+          <strong class="chip-val" id="cat-benchmark-val">NIFTY 500 TRI</strong>
+          <span class="chip-sub" id="cat-benchmark-proxy">Proxy: Motilal Oswal Nifty 500 Index Fund (147625)</span>
+        </div>
+        <div class="cat-quick-actions">
+          <button id="btn-toggle-scatter" class="action-btn toggle-btn">
+            📈 Toggle Risk-Return Chart
+          </button>
+          <a href="#" id="btn-download-cat-csv" class="action-btn download-btn">
+            📥 Download CSV
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Risk-Return Visualizer (Collapsible) -->
+    <div class="chart-container-card" id="chart-section" style="display: none;">
+      <div class="chart-header">
+        <div>
+          <h3 class="chart-title">Risk vs. Return Visualizer (3-Year Horizon)</h3>
+          <p class="chart-sub">X-Axis: Annualized Volatility (StdDev) | Y-Axis: 3Y CAGR (%) | Bubble Size: AUM</p>
+        </div>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="dot best"></span> BEST / Tier 1</span>
+          <span class="legend-item"><span class="dot superior"></span> Tier 2</span>
+          <span class="legend-item"><span class="dot average"></span> Tier 3</span>
+          <span class="legend-item"><span class="dot below"></span> Tier 4 / Lagging</span>
+        </div>
+      </div>
+      <div class="chart-canvas-wrapper">
+        <canvas id="riskReturnCanvas" width="1000" height="380"></canvas>
+      </div>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <section class="toolbar-section">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="filter-search" placeholder="Search by scheme name, AMC, or ISIN..." autocomplete="off">
+        <button id="btn-clear-search" class="clear-icon" style="display: none;">✕</button>
+      </div>
+
+      <div class="filter-controls">
+        <div class="filter-group">
+          <label for="filter-tier">Rating Tier:</label>
+          <select id="filter-tier" class="filter-select">
+            <option value="ALL">All Tiers (Best to Worst)</option>
+            <option value="BEST">BEST (Tier 1 - Elite)</option>
+            <option value="Tier 2">Tier 2 - Superior</option>
+            <option value="Tier 3">Tier 3 - Average</option>
+            <option value="Tier 4">Tier 4 - Below Average</option>
+            <option value="WORST">WORST (Lagging)</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="filter-sort">Sort By:</label>
+          <select id="filter-sort" class="filter-select">
+            <option value="composite_rank_asc">Composite Rank (BEST first)</option>
+            <option value="return_3y_desc">3Y Return (Highest first)</option>
+            <option value="return_1y_desc">1Y Return (Highest first)</option>
+            <option value="alpha_desc">Jensen's Alpha (Highest first)</option>
+            <option value="sharpe_desc">Sharpe Ratio (Highest first)</option>
+            <option value="volatility_asc">Volatility (Lowest risk first)</option>
+            <option value="aum_desc">AUM (Largest first)</option>
+            <option value="ter_asc">Expense Ratio (Lowest TER)</option>
+          </select>
+        </div>
+
+        <div class="filter-count">
+          Showing <span id="filtered-count">0</span> funds
+        </div>
+      </div>
+    </section>
+
+    <!-- Mutual Funds Data Table -->
+    <div class="table-card">
+      <div class="table-responsive">
+        <table class="data-table" id="funds-table">
+          <thead>
+            <tr>
+              <th class="col-rank">Rank</th>
+              <th class="col-scheme">Scheme & AMC</th>
+              <th class="col-score">Composite Score</th>
+              <th class="col-ratings">Agency Ratings (MS / VR / CR / 1F / ADV)</th>
+              <th class="col-returns">Returns (1Y • 3Y • 5Y CAGR)</th>
+              <th class="col-risk">Risk & CAPM (Beta • Alpha • Sharpe)</th>
+              <th class="col-capture">Capture Ratio</th>
+              <th class="col-ter">Expense (TER)</th>
+              <th class="col-action">Details</th>
+            </tr>
+          </thead>
+          <tbody id="table-body">
+            <!-- Table rows populated dynamically -->
+          </tbody>
+        </table>
+      </div>
+      <div id="table-empty-state" class="empty-state" style="display: none;">
+        <div class="empty-icon">🔎</div>
+        <h3>No funds match your filter criteria</h3>
+        <p>Try resetting the search keywords or selecting "All Tiers".</p>
+        <button id="btn-reset-filters" class="nav-btn secondary-btn">Reset All Filters</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Interactive Slide-over Fund Detail Drawer -->
+  <div class="drawer-overlay" id="fund-drawer-overlay"></div>
+  <aside class="fund-drawer" id="fund-drawer">
+    <div class="drawer-header">
+      <div>
+        <span class="drawer-category-badge" id="drawer-category">Flexi Cap Fund</span>
+        <h3 class="drawer-scheme-name" id="drawer-scheme-name">Parag Parikh Flexi Cap Fund</h3>
+        <div class="drawer-meta-line" id="drawer-meta-line">PPFAS Mutual Fund • Direct Growth</div>
+      </div>
+      <button class="drawer-close-btn" id="drawer-close-btn">&times;</button>
+    </div>
+
+    <div class="drawer-body" id="drawer-content">
+      <!-- Dynamic detailed fund information rendered here -->
+    </div>
+  </aside>
+
+  <!-- Modal: Online Hosting Evaluation -->
+  <div class="modal-backdrop" id="modal-hosting">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="modal-icon">🌐</span>
+          <h2 class="modal-title">Where Can This Research Platform Be Hosted Online?</h2>
+        </div>
+        <button class="modal-close-btn" id="modal-hosting-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-intro">
+          This platform is designed as an ultra-fast, zero-dependency static application powered by pre-compiled daily SQLite analytics. Here is a complete architectural evaluation of the best hosting environments:
+        </p>
+
+        <div class="hosting-grid">
+          <!-- Option 1: GitHub Pages -->
+          <div class="hosting-card featured">
+            <div class="hosting-badge">TOP RECOMMENDATION (100% FREE)</div>
+            <h3>1. GitHub Pages + GitHub Actions</h3>
+            <div class="hosting-spec">
+              <span>Cost: <strong>$0 / month</strong></span> • 
+              <span>Type: <strong>Global CDN</strong></span> • 
+              <span>Automation: <strong>Built-in Cron</strong></span>
+            </div>
+            <p>
+              The existing repository already has an automated workflow at <code>.github/workflows/daily_update.yml</code> that runs every weekday at 18:00 UTC (23:30 IST).
+            </p>
+            <ul>
+              <li><strong>Zero Server Maintenance:</strong> GitHub automatically hosts the static <code>web/</code> files at <code>https://&lt;username&gt;.github.io/MututalFundResearch/</code>.</li>
+              <li><strong>Automated Daily Refresh:</strong> The GitHub Action fetches AMFI daily NAVs, runs the calculations, writes the updated <code>web/data/funds.json</code> and Excel workbook, and commits back to the repo.</li>
+              <li><strong>Custom Domains & HTTPS:</strong> Supports free SSL and custom domain mapping (e.g., <code>research.yourdomain.com</code>).</li>
+            </ul>
+            <div class="hosting-step-box">
+              <strong>Quick Deployment Command:</strong><br>
+              <code>git push origin main</code> & enable <em>GitHub Pages</em> under Repo Settings &gt; Pages &gt; Source: <code>main</code> / <code>web/</code>.
+            </div>
+          </div>
+
+          <!-- Option 2: Cloudflare Pages -->
+          <div class="hosting-card">
+            <div class="hosting-badge-alt">FASTEST GLOBAL EDGE</div>
+            <h3>2. Cloudflare Pages</h3>
+            <div class="hosting-spec">
+              <span>Cost: <strong>Free Tier</strong></span> • 
+              <span>Speed: <strong>Sub-20ms Edge</strong></span> • 
+              <span>Bandwidth: <strong>Unlimited</strong></span>
+            </div>
+            <p>
+              Connect your GitHub repository to Cloudflare Pages with build directory set to <code>web</code>. Every time GitHub Actions commits new daily NAV data, Cloudflare deploys the changes globally across 300+ edge data centers in seconds.
+            </p>
+          </div>
+
+          <!-- Option 3: Vercel / Netlify -->
+          <div class="hosting-card">
+            <div class="hosting-badge-alt">EASIEST DEV EXPERIENCE</div>
+            <h3>3. Vercel or Netlify</h3>
+            <div class="hosting-spec">
+              <span>Cost: <strong>Free Tier</strong></span> • 
+              <span>Features: <strong>Preview Branches</strong></span>
+            </div>
+            <p>
+              Simply import the repository or drag-and-drop the <code>web/</code> directory. Instant deployment with automatic SSL, Brotli compression, and immutable cache invalidation.
+            </p>
+          </div>
+
+          <!-- Option 4: Full Backend Server (Render / Railway / VPS) -->
+          <div class="hosting-card">
+            <div class="hosting-badge-alt">DYNAMIC PYTHON BACKEND</div>
+            <h3>4. Render, Railway, or Linux VPS</h3>
+            <div class="hosting-spec">
+              <span>Cost: <strong>$0–$7 / month</strong></span> • 
+              <span>Type: <strong>Dedicated Python Service</strong></span>
+            </div>
+            <p>
+              If you want live on-demand calculation APIs or user accounts, you can run <code>python3 web/server.py</code> directly on a Render Web Service or $5/month Hetzner/DigitalOcean VPS with systemd and Caddy/Nginx reverse proxy.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="nav-btn primary-btn" id="modal-hosting-ack">Close Guide</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Methodology & Formulas -->
+  <div class="modal-backdrop" id="modal-methodology">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="modal-icon">📐</span>
+          <h2 class="modal-title">Quantitative Methodology & SEBI Benchmark Standards</h2>
+        </div>
+        <button class="modal-close-btn" id="modal-methodology-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <h3>1. Multi-Agency Composite Scoring (0–100)</h3>
+        <p>
+          Rather than relying on a single rating agency, funds are scored using a weighted synthesis across 5 major analytical frameworks:
+        </p>
+        <div class="methodology-weights">
+          <div class="weight-item"><strong>Morningstar Stars:</strong> 20%</div>
+          <div class="weight-item"><strong>Morningstar Medalist:</strong> 10%</div>
+          <div class="weight-item"><strong>Value Research Stars:</strong> 20%</div>
+          <div class="weight-item"><strong>CRISIL CMFR Rank:</strong> 20%</div>
+          <div class="weight-item"><strong>1 Finance Score:</strong> 15%</div>
+          <div class="weight-item"><strong>Advisorkhoj Volatility:</strong> 15%</div>
+        </div>
+
+        <h3 style="margin-top: 24px;">2. Category-Specific Benchmark Framework (SEBI Mandated Tier 1)</h3>
+        <p>
+          Every equity category is paired strictly with its designated SEBI Tier 1 benchmark to compute accurate sensitivity and excess return:
+        </p>
+        <table class="mini-table">
+          <thead>
+            <tr>
+              <th>Equity Category</th>
+              <th>Designated Benchmark</th>
+              <th>AMFI Historical Proxy</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Large Cap</strong></td><td>NIFTY 100 TRI</td><td>Axis Nifty 100 Index Fund (147666)</td></tr>
+            <tr><td><strong>Mid Cap</strong></td><td>NIFTY Midcap 150 TRI</td><td>Motilal Oswal Nifty Midcap 150 Index Fund (147622)</td></tr>
+            <tr><td><strong>Small Cap</strong></td><td>NIFTY Smallcap 250 TRI</td><td>Motilal Oswal Nifty Smallcap 250 Index Fund (147623)</td></tr>
+            <tr><td><strong>Flexi Cap</strong></td><td>NIFTY 500 TRI</td><td>Motilal Oswal Nifty 500 Index Fund (147625)</td></tr>
+            <tr><td><strong>Multi Cap</strong></td><td>NIFTY 500 Multicap 50:25:25 TRI</td><td>Navi Nifty 500 Multicap Index Fund (152751)</td></tr>
+            <tr><td><strong>Large & Mid Cap</strong></td><td>NIFTY LargeMidcap 250 TRI</td><td>Edelweiss NIFTY LargeMidcap 250 Index Fund (149343)</td></tr>
+            <tr><td><strong>ELSS / Focused / Value / Dividend</strong></td><td>NIFTY 500 TRI</td><td>Motilal Oswal Nifty 500 Index Fund (147625)</td></tr>
+          </tbody>
+        </table>
+
+        <h3 style="margin-top: 24px;">3. CAPM & Capture Ratio Formulas</h3>
+        <ul>
+          <li><strong>Beta (&beta;):</strong> Covariance of fund daily returns with category benchmark / Variance of benchmark.</li>
+          <li><strong>Jensen's Alpha (&alpha;):</strong> Annualized excess return over CAPM expectations using India 10Y G-Sec yield (Rf = 7.0%):<br>
+            <code>Alpha = CAGR_fund - [Rf + Beta * (CAGR_benchmark - Rf)]</code>
+          </li>
+          <li><strong>Morningstar Monthly Capture Ratios:</strong> Compounded monthly returns during positive months (Upside Capture) and negative months (Downside Capture). An Overall Capture Ratio &gt; 1.0 proves superior upside participation with downside defense.</li>
+        </ul>
+      </div>
+      <div class="modal-footer">
+        <button class="nav-btn primary-btn" id="modal-methodology-ack">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-left">
+        <p><strong>Indian Equity Mutual Funds Quantitative Research</strong></p>
+        <p class="footer-note">
+          Data ingested from AMFI India, MFAPI, and SEBI circulars. Benchmark proxy series track standard Total Return Indices (TRI).
+          For research and educational analysis only. Not financial advice.
+        </p>
+      </div>
+      <div class="footer-right">
+        <a href="data/Indian_Equity_Mutual_Funds_Master.xlsx" class="footer-link" download="Indian_Equity_Mutual_Funds_Master.xlsx">Download Master Excel (.xlsx)</a>
+        <a href="data/all_equity_summary.csv" class="footer-link" download="all_equity_summary.csv">Download Master CSV</a>
+        <a href="#main-navbar" class="footer-link">Back to Top ↑</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
