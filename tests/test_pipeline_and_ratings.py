@@ -781,6 +781,34 @@ class TestGeminiAISummarizer(unittest.TestCase):
         self.assertIn("btn-generate-ai", js)
         self.assertIn("ai-badge", js)
 
+    def test_candidate_fallback_models_order(self):
+        """Verifies candidate fallback models exist in both backend and frontend in the exact requested order."""
+        from ai_summarizer import CANDIDATE_MODELS
+        requested_models = [
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash-lite",
+            "gemini-3.8-flash-lite-tts",
+            "nano-banana-2-lite",
+            "gemini-3.5-flash",
+            "gemini-3.6-flash",
+            "gemini-3.7-flash",
+            "gemini-3.8-flash",
+        ]
+        # Verify all models are present in backend CANDIDATE_MODELS
+        for m in requested_models:
+            self.assertIn(m, CANDIDATE_MODELS)
+
+        # Verify ordering is preserved
+        indices = [CANDIDATE_MODELS.index(m) for m in requested_models]
+        self.assertEqual(indices, sorted(indices))
+
+        # Verify web/app.js contains FALLBACK_CANDIDATE_MODELS and the same order
+        with open(os.path.join(WEB_DIR, "app.js"), "r", encoding="utf-8") as f:
+            js = f.read()
+        self.assertIn("FALLBACK_CANDIDATE_MODELS", js)
+        for m in requested_models:
+            self.assertIn(f'"{m}"', js)
+
 
 if __name__ == "__main__":
     unittest.main()

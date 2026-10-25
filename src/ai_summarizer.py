@@ -23,9 +23,18 @@ REPO_ROOT = os.path.dirname(CURRENT_DIR)
 DATA_DIR = os.path.join(REPO_ROOT, "data")
 CACHE_FILE = os.path.join(DATA_DIR, "ai_summaries_cache.json")
 
-# Default Gemini models in priority order (supporting latest 3.x and 2.x releases)
+# Default Gemini models in priority order with robust fallbacks
 CANDIDATE_MODELS = [
     "gemini-3.1-pro",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite",
+    "gemini-3.8-flash-lite-tts",
+    "nano-banana-2-lite",
+    "gemini-3.1-flash-lite-image",
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
+    "gemini-3.7-flash",
+    "gemini-3.8-flash",
     "gemini-3.1-flash",
     "gemini-3-pro",
     "gemini-3-flash",

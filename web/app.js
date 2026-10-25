@@ -900,11 +900,43 @@ function escapeHtml(str) {
     .replace(/'/g, "&#039;");
 }
 
+// Normalize user model name or slug into API-compatible slug
+function normalizeGeminiModel(input) {
+  if (!input || typeof input !== "string") return "gemini-3.1-pro";
+  const trimmed = input.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("nano") && lower.includes("banana")) {
+    return "nano-banana-2-lite";
+  }
+  return lower.replace(/[\(\)]/g, "").trim().replace(/\s+/g, "-");
+}
+
+// Ordered fallback models in requested priority sequence
+const FALLBACK_CANDIDATE_MODELS = [
+  "gemini-3.1-pro",
+  "gemini-3.1-flash-lite",
+  "gemini-3.5-flash-lite",
+  "gemini-3.8-flash-lite-tts",
+  "nano-banana-2-lite",
+  "gemini-3.1-flash-lite-image",
+  "gemini-3.5-flash",
+  "gemini-3.6-flash",
+  "gemini-3.7-flash",
+  "gemini-3.8-flash",
+  "gemini-3.1-flash",
+  "gemini-3-pro",
+  "gemini-3-flash",
+  "gemini-2.5-pro",
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash"
+];
+
 // Get user-configured or default Gemini model
 function getSavedGeminiModel() {
   const custom = localStorage.getItem("mf_gemini_model");
   if (custom && custom.trim()) {
-    return custom.trim().toLowerCase().replace(/\s+/g, "-");
+    return normalizeGeminiModel(custom);
   }
   return "gemini-3.1-pro";
 }
@@ -923,11 +955,11 @@ function changeGeminiApiKey(event) {
     if (newKey.trim()) {
       localStorage.setItem("mf_gemini_api_key", newKey.trim());
       const newModel = prompt(
-        "Enter your Gemini Model Name (e.g. gemini-3.1-pro, gemini-3.1-flash, gemini-2.5-flash):",
+        "Enter your Gemini Model Name (e.g. gemini-3.1-pro, gemini-3.1-flash-lite, gemini-3.5-flash, gemini-3.8-flash):",
         currentModel
       );
       if (newModel && newModel.trim()) {
-        const cleaned = newModel.trim().toLowerCase().replace(/\s+/g, "-");
+        const cleaned = normalizeGeminiModel(newModel);
         localStorage.setItem("mf_gemini_model", cleaned);
       }
       sessionStorage.removeItem("mf_resolved_gemini_model");
@@ -948,15 +980,8 @@ async function resolveGeminiModel(apiKey) {
   const userModel = getSavedGeminiModel();
   const candidateModels = [
     userModel,
-    "gemini-3.1-pro",
-    "gemini-3.1-flash",
-    "gemini-3-pro",
-    "gemini-3-flash",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
+    ...FALLBACK_CANDIDATE_MODELS,
     "gemini-2.0-flash-exp",
-    "gemini-1.5-flash",
     "gemini-1.5-pro"
   ].filter((m, i, arr) => m && arr.indexOf(m) === i);
 
@@ -964,28 +989,49 @@ async function resolveGeminiModel(apiKey) {
     const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
     if (resp.ok) {
       const data = await resp.json();
-      const available = (data.models || [])
-        .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
-        .map((m) => m.name.replace("models/", ""));
+      const availableModels = data.models || [];
 
       // Check if user's configured model or any candidate is available
       for (const cand of candidateModels) {
-        if (available.includes(cand)) {
-          sessionStorage.setItem("mf_resolved_gemini_model", cand);
-          return cand;
+        const candNorm = cand.toLowerCase().replace(/[\s\(\)\-_]/g, "");
+        const matched = availableModels.find((m) => {
+          const apiName = (m.name || "").replace("models/", "");
+          const apiNorm = apiName.toLowerCase().replace(/[\s\(\)\-_]/g, "");
+          const dispNorm = (m.displayName || "").toLowerCase().replace(/[\s\(\)\-_]/g, "");
+          const methods = m.supportedGenerationMethods || [];
+          const canGenerate = methods.length === 0 || methods.includes("generateContent");
+          return (
+            canGenerate &&
+            (apiName === cand ||
+             apiNorm === candNorm ||
+             dispNorm === candNorm ||
+             apiNorm.includes(candNorm) ||
+             dispNorm.includes(candNorm))
+          );
+        });
+
+        if (matched) {
+          const actualName = (matched.name || "").replace("models/", "");
+          sessionStorage.setItem("mf_resolved_gemini_model", actualName);
+          return actualName;
         }
       }
 
       // Check for any 3.x, 2.x, or flash model
-      const anyModern = available.find((m) => m.includes("gemini-3") || m.includes("gemini-2") || m.includes("flash"));
+      const anyModern = availableModels.find((m) => {
+        const name = (m.name || "").toLowerCase();
+        return name.includes("gemini-3") || name.includes("gemini-2") || name.includes("flash");
+      });
       if (anyModern) {
-        sessionStorage.setItem("mf_resolved_gemini_model", anyModern);
-        return anyModern;
+        const actualName = (anyModern.name || "").replace("models/", "");
+        sessionStorage.setItem("mf_resolved_gemini_model", actualName);
+        return actualName;
       }
 
-      if (available.length > 0) {
-        sessionStorage.setItem("mf_resolved_gemini_model", available[0]);
-        return available[0];
+      if (availableModels.length > 0) {
+        const actualName = (availableModels[0].name || "").replace("models/", "");
+        sessionStorage.setItem("mf_resolved_gemini_model", actualName);
+        return actualName;
       }
     }
   } catch (e) {
@@ -1008,11 +1054,11 @@ async function generateLiveGeminiSummary(schemeCode) {
     localStorage.setItem("mf_gemini_api_key", apiKey);
 
     const modelChoice = prompt(
-      "Enter your Gemini Model Name (Default: gemini-3.1-pro):",
+      "Enter your Gemini Model Name (Default: gemini-3.1-pro):\n(Fallbacks: gemini-3.1-flash-lite, gemini-3.5-flash, gemini-3.8-flash...)",
       "gemini-3.1-pro"
     );
     if (modelChoice && modelChoice.trim()) {
-      localStorage.setItem("mf_gemini_model", modelChoice.trim().toLowerCase().replace(/\s+/g, "-"));
+      localStorage.setItem("mf_gemini_model", normalizeGeminiModel(modelChoice));
     }
   }
 
@@ -1073,14 +1119,7 @@ ${JSON.stringify({
     const candidateModels = [
       activeModel,
       resolvedModel,
-      "gemini-3.1-pro",
-      "gemini-3.1-flash",
-      "gemini-3-pro",
-      "gemini-3-flash",
-      "gemini-2.5-pro",
-      "gemini-2.5-flash",
-      "gemini-2.0-flash",
-      "gemini-1.5-flash"
+      ...FALLBACK_CANDIDATE_MODELS
     ].filter((m, i, arr) => m && arr.indexOf(m) === i);
 
     let successData = null;
