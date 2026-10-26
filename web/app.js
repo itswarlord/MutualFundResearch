@@ -26,6 +26,7 @@ const state = {
     lastMouseX: 0,
     lastMouseY: 0,
   },
+  activeInspectedFund: null,
 };
 
 // 3rd Dimension Metric Configurations
@@ -289,7 +290,106 @@ function setupEventListeners() {
   window.addEventListener("resize", () => {
     if (state.showChart) drawRiskReturnChart();
   });
+
+  // Companion Scheme Inspector Dossier Button
+  const inspectorDossierBtn = document.getElementById("inspector-btn-dossier");
+  if (inspectorDossierBtn) {
+    inspectorDossierBtn.addEventListener("click", () => {
+      if (state.activeInspectedFund && state.activeInspectedFund.scheme_code) {
+        openFundDrawer(state.activeInspectedFund.scheme_code);
+      }
+    });
+  }
 }
+
+// Scheme Diagnostic Companion Inspector
+function updateSchemeInspector(fund) {
+  if (!fund) return;
+  state.activeInspectedFund = fund;
+
+  const titleEl = document.getElementById("inspector-scheme-name");
+  const metaEl = document.getElementById("inspector-meta");
+  const rankBadgeEl = document.getElementById("inspector-rank-badge");
+  const alphaEl = document.getElementById("inspector-alpha");
+  const betaEl = document.getElementById("inspector-beta");
+  const sharpeEl = document.getElementById("inspector-sharpe");
+  const sortinoEl = document.getElementById("inspector-sortino");
+  const volEl = document.getElementById("inspector-volatility");
+  const captureEl = document.getElementById("inspector-capture");
+  const aumEl = document.getElementById("inspector-aum");
+  const terEl = document.getElementById("inspector-ter");
+  const msEl = document.getElementById("inspector-ms");
+  const vrEl = document.getElementById("inspector-vr");
+  const crisilEl = document.getElementById("inspector-crisil");
+
+  if (titleEl) titleEl.textContent = fund.scheme_name || "Scheme Focus";
+  if (metaEl) metaEl.textContent = `${fund.amc || "Direct Plan"} • Code: ${fund.scheme_code || "—"}`;
+
+  if (rankBadgeEl) {
+    rankBadgeEl.textContent = `#${fund.composite_rank || "—"} IN CATEGORY`;
+    const tier = fund.rating_tier || "";
+    if (tier.includes("BEST")) rankBadgeEl.className = "inspector-rank-pill best";
+    else if (tier.includes("Tier 2")) rankBadgeEl.className = "inspector-rank-pill superior";
+    else if (tier.includes("Tier 3")) rankBadgeEl.className = "inspector-rank-pill average";
+    else rankBadgeEl.className = "inspector-rank-pill below";
+  }
+
+  if (alphaEl) {
+    if (fund.alpha !== null && fund.alpha !== undefined) {
+      alphaEl.textContent = (fund.alpha >= 0 ? "+" : "") + fund.alpha.toFixed(2) + "%";
+      alphaEl.className = "im-val " + (fund.alpha >= 0 ? "val-pos" : "val-neg");
+    } else {
+      alphaEl.textContent = "N/A";
+      alphaEl.className = "im-val";
+    }
+  }
+
+  if (betaEl) betaEl.textContent = fund.beta !== null && fund.beta !== undefined ? fund.beta.toFixed(2) : "N/A";
+  if (sharpeEl) sharpeEl.textContent = fund.sharpe_ratio !== null && fund.sharpe_ratio !== undefined ? fund.sharpe_ratio.toFixed(2) : "N/A";
+  if (sortinoEl) sortinoEl.textContent = fund.sortino_ratio !== null && fund.sortino_ratio !== undefined ? fund.sortino_ratio.toFixed(2) : "N/A";
+  if (volEl) volEl.textContent = fund.standard_deviation !== null && fund.standard_deviation !== undefined ? fund.standard_deviation.toFixed(2) + "%" : "N/A";
+  if (captureEl) captureEl.textContent = fund.capture_ratio !== null && fund.capture_ratio !== undefined ? fund.capture_ratio.toFixed(2) : "N/A";
+  if (aumEl) aumEl.textContent = fund.aum_cr ? "₹" + Math.round(fund.aum_cr).toLocaleString() + " Cr" : "N/A";
+  if (terEl) terEl.textContent = fund.direct_ter !== null && fund.direct_ter !== undefined ? fund.direct_ter.toFixed(2) + "%" : "N/A";
+
+  if (msEl) {
+    if (fund.morningstar_rating) {
+      msEl.textContent = "★".repeat(fund.morningstar_rating);
+    } else {
+      msEl.textContent = "—";
+    }
+  }
+  if (vrEl) {
+    if (fund.valueresearch_rating) {
+      vrEl.textContent = `${fund.valueresearch_rating} Stars`;
+    } else {
+      vrEl.textContent = "Not Rated";
+    }
+  }
+  if (crisilEl) {
+    crisilEl.textContent = fund.crisil_rank ? fund.crisil_rank : "Unranked";
+  }
+}
+
+window.previewFundInInspector = function(schemeCode) {
+  const fund = state.rawFunds.find((f) => f.scheme_code === schemeCode);
+  if (fund) {
+    updateSchemeInspector(fund);
+  }
+};
+
+const CAT_CODES = {
+  "Flexi Cap": "01 / FLX",
+  "Large Cap": "02 / LRG",
+  "Mid Cap": "03 / MID",
+  "Small Cap": "04 / SML",
+  "Large & Mid Cap": "05 / L&M",
+  "Multi Cap": "06 / MLT",
+  "ELSS (Tax Saving)": "07 / ELS",
+  "Focused Fund": "08 / FCS",
+  "Value & Contra": "09 / VAL",
+  "Dividend Yield": "10 / DIV",
+};
 
 function setupModal(openBtnId, modalId, closeBtnId, ackBtnId) {
   const openBtn = document.getElementById(openBtnId);
@@ -362,6 +462,10 @@ async function loadFundsData() {
     renderCategoryTabs();
     updateCategoryBanner();
     renderTable();
+    const filtered = getFilteredFunds();
+    if (filtered.length > 0) {
+      updateSchemeInspector(filtered[0]);
+    }
     if (state.showChart) {
       drawRiskReturnChart();
     }
@@ -394,10 +498,11 @@ function renderCategoryTabs() {
   }
 
   // Individual Category Tabs
-  state.categories.forEach((cat) => {
+  state.categories.forEach((cat, idx) => {
+    const code = CAT_CODES[cat.name] || `${String(idx + 1).padStart(2, "0")}`;
     const btn = document.createElement("button");
     btn.className = `cat-tab-btn ${state.activeCategory === cat.name ? "active" : ""}`;
-    btn.innerHTML = `${cat.name} <span class="cat-tab-count">${cat.count}</span>`;
+    btn.innerHTML = `<span style="font-family: var(--font-mono); font-size: 10px; color: var(--accent-brass);">${code}</span> ${cat.name} <span class="cat-tab-count">${cat.count}</span>`;
     btn.addEventListener("click", () => selectCategory(cat.name));
     container.appendChild(btn);
   });
@@ -423,6 +528,10 @@ function selectCategory(categoryName) {
 
   updateCategoryBanner();
   renderTable();
+  const filtered = getFilteredFunds();
+  if (filtered.length > 0) {
+    updateSchemeInspector(filtered[0]);
+  }
   if (state.showChart) drawRiskReturnChart();
 }
 
@@ -557,7 +666,7 @@ function renderTable() {
       const dirTer = fund.direct_ter !== null ? `${fund.direct_ter.toFixed(2)}%` : "N/A";
 
       return `
-        <tr data-scheme-code="${fund.scheme_code}" onclick="openFundDrawer(${fund.scheme_code})">
+        <tr data-scheme-code="${fund.scheme_code}" onclick="openFundDrawer(${fund.scheme_code})" onmouseenter="previewFundInInspector(${fund.scheme_code})">
           <td class="col-rank">
             <span class="rank-badge ${medalClass}">${rank}</span>
           </td>
@@ -566,7 +675,7 @@ function renderTable() {
             <div class="scheme-meta">
               <span class="tag-amc">${escapeHtml(fund.amc)}</span>
               ${fund.isin_growth ? `<span class="tag-isin" title="ISIN">${fund.isin_growth}</span>` : ""}
-              ${fund.benchmark_name ? `<span class="tag-isin" style="color:#38bdf8;" title="Category Benchmark">${escapeHtml(fund.benchmark_name)}</span>` : ""}
+              ${fund.benchmark_name ? `<span class="tag-isin" style="color: var(--accent-brass);" title="Category Benchmark">${escapeHtml(fund.benchmark_name)}</span>` : ""}
             </div>
           </td>
           <td class="col-score">
@@ -591,7 +700,7 @@ function renderTable() {
           </td>
           <td class="col-returns">
             <div class="returns-cluster">
-              <div class="ret-primary">${ret3y} <span style="font-size:10px; color:#64748b;">(3Y)</span></div>
+              <div class="ret-primary">${ret3y} <span style="font-size:10px; color: var(--text-dim);">(3Y)</span></div>
               <div class="ret-secondary">1Y: ${ret1y} • 5Y: ${ret5y}</div>
             </div>
           </td>
@@ -606,15 +715,15 @@ function renderTable() {
           </td>
           <td class="col-capture">
             <div class="capture-box">
-              <span class="capture-ratio-val ${fund.capture_ratio >= 1.0 ? "val-positive" : ""}">${capRatio}</span>
-              <span class="capture-split">Up/Dn: ${upDown}</span>
+              <span class="capture-primary ${fund.capture_ratio >= 1.0 ? "val-pos" : ""}">${capRatio}</span>
+              <span class="capture-sub">Up/Dn: ${upDown}</span>
             </div>
           </td>
           <td class="col-ter">
             <div class="ter-direct">${dirTer}</div>
           </td>
           <td class="col-action" onclick="event.stopPropagation();">
-            <button class="btn-details" onclick="openFundDrawer(${fund.scheme_code})">Inspect</button>
+            <button class="btn-row-details" onclick="openFundDrawer(${fund.scheme_code})">Inspect</button>
           </td>
         </tr>
       `;
@@ -1042,6 +1151,8 @@ function updateChartTooltip(pt) {
   if (!tooltip || !wrapper || !pt || !pt.fund) return;
 
   const fund = pt.fund;
+  updateSchemeInspector(fund);
+
   const horizon = state.chartHorizon || "3y";
   const horizonLabel = horizon === "1y" ? "1-Year Return" : "3-Year CAGR";
   const retVal = horizon === "1y" ? fund.return_1y : fund.return_3y_cagr;
@@ -1087,7 +1198,7 @@ function updateChartTooltip(pt) {
       </div>
       <div class="tooltip-metric-box">
         <span class="metric-box-label">Z-Dim (${dimCfg.shortLabel})</span>
-        <span class="metric-box-val" style="color: #38bdf8;">${zFormatted}</span>
+        <span class="metric-box-val" style="color: var(--accent-brass);">${zFormatted}</span>
       </div>
       <div class="tooltip-metric-box">
         <span class="metric-box-label">Live AUM (Size)</span>
@@ -1304,9 +1415,9 @@ function draw2DChart(canvas, ctx, categoryFunds, horizon, width, height, isLight
 
     let color = "#64748b";
     const tier = f.rating_tier || "";
-    if (tier.includes("BEST")) color = "#10b981";
-    else if (tier.includes("Tier 2")) color = "#3b82f6";
-    else if (tier.includes("Tier 3")) color = "#f59e0b";
+    if (tier.includes("BEST")) color = "#22c55e";
+    else if (tier.includes("Tier 2")) color = "#c59b27";
+    else if (tier.includes("Tier 3")) color = "#94a3b8";
 
     newPoints.push({
       fund: f,
@@ -1604,9 +1715,9 @@ function draw3DChart(canvas, ctx, categoryFunds, horizon, width, height, isLight
 
     let color = "#64748b";
     const tier = f.rating_tier || "";
-    if (tier.includes("BEST")) color = "#10b981";
-    else if (tier.includes("Tier 2")) color = "#3b82f6";
-    else if (tier.includes("Tier 3")) color = "#f59e0b";
+    if (tier.includes("BEST")) color = "#22c55e";
+    else if (tier.includes("Tier 2")) color = "#c59b27";
+    else if (tier.includes("Tier 3")) color = "#94a3b8";
 
     points3D.push({
       fund: f,
@@ -1739,11 +1850,11 @@ function formatPercent(val) {
 }
 
 function getScoreBarColor(score) {
-  if (!score) return "#64748b";
-  if (score >= 75) return "linear-gradient(90deg, #10b981, #34d399)";
-  if (score >= 65) return "linear-gradient(90deg, #2563eb, #60a5fa)";
-  if (score >= 50) return "linear-gradient(90deg, #d97706, #fbbf24)";
-  return "linear-gradient(90deg, #dc2626, #f87171)";
+  if (!score) return "var(--border-hairline)";
+  if (score >= 75) return "var(--accent-emerald)";
+  if (score >= 60) return "var(--accent-brass)";
+  if (score >= 45) return "#94a3b8";
+  return "var(--accent-crimson)";
 }
 
 function escapeHtml(str) {
