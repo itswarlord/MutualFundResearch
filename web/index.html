@@ -128,29 +128,90 @@
           <span class="chip-sub" id="cat-benchmark-proxy">Proxy: Motilal Oswal Nifty 500 Index Fund (147625)</span>
         </div>
         <div class="cat-quick-actions">
-          <button id="btn-toggle-scatter" class="action-btn toggle-btn">
-            📈 Toggle Risk-Return Chart
+          <button id="btn-toggle-scatter" class="action-btn toggle-btn" title="Toggle Risk vs. Return Visualizer">
+            ✕ Hide Risk-Return Chart
           </button>
         </div>
       </div>
     </div>
 
     <!-- Interactive Risk-Return Visualizer (Collapsible) -->
-    <div class="chart-container-card" id="chart-section" style="display: none;">
+    <div class="chart-container-card" id="chart-section">
       <div class="chart-header">
-        <div>
-          <h3 class="chart-title">Risk vs. Return Visualizer (3-Year Horizon)</h3>
-          <p class="chart-sub">X-Axis: Annualized Volatility (StdDev) | Y-Axis: 3Y CAGR (%) | Bubble Size: AUM</p>
+        <div class="chart-title-area">
+          <div class="chart-title-row">
+            <h3 class="chart-title" id="chart-main-title">Risk vs. Return Visualizer</h3>
+            <span class="chart-badge" id="chart-plotted-count">Calculating schemes...</span>
+          </div>
+          <p class="chart-sub" id="chart-subtitle">
+            X-Axis: Annualized Volatility (&sigma;) | Y-Axis: <span id="chart-y-axis-label">3Y CAGR (%)</span> | <span id="chart-z-axis-sub">Z-Axis: Sharpe Ratio | Bubble Size: AUM</span> | Drag to rotate 3D &bull; Hover for stats
+          </p>
         </div>
+
+        <div class="chart-header-controls">
+          <!-- View Mode: 2D vs 3D -->
+          <div class="view-mode-group">
+            <span class="control-label">View:</span>
+            <div class="view-pill-toggle">
+              <button type="button" class="view-tab-btn" id="btn-view-2d" data-view="2d" title="Standard 2D Risk-Return Bubble Scatter Plot">2D Bubble</button>
+              <button type="button" class="view-tab-btn active" id="btn-view-3d" data-view="3d" title="Interactive 3D Perspective Orbit Plot">🧊 3D Orbit</button>
+            </div>
+          </div>
+
+          <!-- Third Dimension (Z-Axis / Metric) Selector -->
+          <div class="third-dim-group" id="third-dim-wrapper">
+            <label for="select-third-dim" class="control-label">3rd Dim (Z):</label>
+            <select id="select-third-dim" class="control-select" title="Choose the metric represented on the 3rd dimension / Z-axis">
+              <option value="sharpe_ratio" selected>Sharpe Ratio (Risk-Adjusted)</option>
+              <option value="alpha">Jensen's Alpha (%)</option>
+              <option value="beta">Beta (&beta; - Sensitivity)</option>
+              <option value="aum_cr">Live AUM (₹ Cr)</option>
+              <option value="sortino_ratio">Sortino Ratio</option>
+              <option value="capture_ratio">Capture Ratio</option>
+            </select>
+          </div>
+
+          <!-- Horizon Switcher -->
+          <div class="horizon-switch-group">
+            <span class="control-label">Horizon:</span>
+            <div class="horizon-pill-toggle">
+              <button type="button" class="horizon-tab-btn active" id="btn-horizon-3y" data-horizon="3y">3Y Horizon</button>
+              <button type="button" class="horizon-tab-btn" id="btn-horizon-1y" data-horizon="1y">1Y Horizon</button>
+            </div>
+          </div>
+
+          <!-- Reset Camera (Visible in 3D Mode) -->
+          <button type="button" class="reset-cam-btn" id="btn-reset-camera" style="display: inline-flex;" title="Reset 3D camera rotation angle and zoom">
+            ↺ Reset 3D Angle
+          </button>
+        </div>
+      </div>
+
+      <!-- Legends Row: Tier Colors + Bubble Size Scale -->
+      <div class="chart-legends-bar">
         <div class="chart-legend">
-          <span class="legend-item"><span class="dot best"></span> BEST / Tier 1</span>
+          <span class="legend-title">Tier:</span>
+          <span class="legend-item"><span class="dot best"></span> BEST (Tier 1)</span>
           <span class="legend-item"><span class="dot superior"></span> Tier 2</span>
           <span class="legend-item"><span class="dot average"></span> Tier 3</span>
           <span class="legend-item"><span class="dot below"></span> Tier 4 / Lagging</span>
         </div>
+        <div class="chart-aum-scale-legend" id="chart-aum-scale-legend" style="display: none;">
+          <span class="legend-title">AUM Bubble Scale:</span>
+          <span class="aum-scale-item"><span class="aum-bubble-sample aum-sm"></span> &lt;₹1k Cr</span>
+          <span class="aum-scale-item"><span class="aum-bubble-sample aum-md"></span> ~₹15k Cr</span>
+          <span class="aum-scale-item"><span class="aum-bubble-sample aum-lg"></span> ~₹50k Cr</span>
+          <span class="aum-scale-item"><span class="aum-bubble-sample aum-xl"></span> &gt;₹100k Cr</span>
+        </div>
       </div>
-      <div class="chart-canvas-wrapper">
-        <canvas id="riskReturnCanvas" width="1000" height="380"></canvas>
+
+      <div class="chart-canvas-wrapper" id="chart-canvas-wrapper">
+        <canvas id="riskReturnCanvas" width="1000" height="460"></canvas>
+        <!-- Floating Interactive Tooltip -->
+        <div id="chart-tooltip" class="chart-tooltip" style="display: none;" role="tooltip"></div>
+        <div class="chart-hint-overlay" id="chart-hint-overlay">
+          <span>🖱️ Click &amp; drag to rotate 3D cube &bull; Scroll to zoom &bull; Hover for 3D stats &bull; Click for scheme</span>
+        </div>
       </div>
     </div>
 

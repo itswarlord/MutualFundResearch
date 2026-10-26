@@ -12,7 +12,66 @@ const state = {
   selectedTier: "ALL",
   selectedSort: "composite_rank_asc",
   selectedFund: null,
-  showChart: false,
+  showChart: true,
+  chartHorizon: "3y",
+  chartViewMode: "3d", // "2d" or "3d"
+  chartThirdDim: "sharpe_ratio", // metric key for 3rd dim / Z-axis
+  chartHoveredFund: null,
+  chartPoints: [],
+  camera3D: {
+    yaw: -0.65,
+    pitch: 0.38,
+    zoom: 1.0,
+    isDragging: false,
+    lastMouseX: 0,
+    lastMouseY: 0,
+  },
+};
+
+// 3rd Dimension Metric Configurations
+const THIRD_DIM_CONFIG = {
+  sharpe_ratio: {
+    key: "sharpe_ratio",
+    label: "Sharpe Ratio",
+    shortLabel: "Sharpe",
+    format: (v) => (v !== null && v !== undefined ? Number(v).toFixed(2) : "N/A"),
+    getVal: (f) => f.sharpe_ratio,
+  },
+  alpha: {
+    key: "alpha",
+    label: "Jensen's Alpha (%)",
+    shortLabel: "Alpha",
+    format: (v) => (v !== null && v !== undefined ? `${v > 0 ? "+" : ""}${Number(v).toFixed(2)}%` : "N/A"),
+    getVal: (f) => f.alpha,
+  },
+  beta: {
+    key: "beta",
+    label: "Market Beta (β)",
+    shortLabel: "Beta",
+    format: (v) => (v !== null && v !== undefined ? Number(v).toFixed(2) : "N/A"),
+    getVal: (f) => f.beta,
+  },
+  aum_cr: {
+    key: "aum_cr",
+    label: "Live AUM (₹ Cr)",
+    shortLabel: "AUM",
+    format: (v) => (v !== null && v !== undefined ? `₹${Math.round(Number(v)).toLocaleString()} Cr` : "N/A"),
+    getVal: (f) => f.aum_cr,
+  },
+  sortino_ratio: {
+    key: "sortino_ratio",
+    label: "Sortino Ratio",
+    shortLabel: "Sortino",
+    format: (v) => (v !== null && v !== undefined ? Number(v).toFixed(2) : "N/A"),
+    getVal: (f) => f.sortino_ratio,
+  },
+  capture_ratio: {
+    key: "capture_ratio",
+    label: "Overall Capture Ratio",
+    shortLabel: "Capture",
+    format: (v) => (v !== null && v !== undefined ? Number(v).toFixed(2) : "N/A"),
+    getVal: (f) => f.capture_ratio,
+  },
 };
 
 // Category Description Mapping
@@ -58,6 +117,7 @@ function setupEventListeners() {
     state.searchTerm = e.target.value.trim().toLowerCase();
     clearBtn.style.display = state.searchTerm ? "block" : "none";
     renderTable();
+    if (state.showChart) drawRiskReturnChart();
   });
 
   clearBtn.addEventListener("click", () => {
@@ -65,12 +125,14 @@ function setupEventListeners() {
     state.searchTerm = "";
     clearBtn.style.display = "none";
     renderTable();
+    if (state.showChart) drawRiskReturnChart();
   });
 
   // Tier Filter
   document.getElementById("filter-tier").addEventListener("change", (e) => {
     state.selectedTier = e.target.value;
     renderTable();
+    if (state.showChart) drawRiskReturnChart();
   });
 
   // Sort Filter
@@ -88,6 +150,7 @@ function setupEventListeners() {
     document.getElementById("filter-sort").value = "composite_rank_asc";
     state.selectedSort = "composite_rank_asc";
     renderTable();
+    if (state.showChart) drawRiskReturnChart();
   });
 
   // Toggle Risk-Return Chart
@@ -97,13 +160,104 @@ function setupEventListeners() {
     const toggleBtn = document.getElementById("btn-toggle-scatter");
     if (state.showChart) {
       chartSection.style.display = "block";
-      toggleBtn.textContent = "✕ Hide Chart";
+      toggleBtn.textContent = "✕ Hide Risk-Return Chart";
       drawRiskReturnChart();
     } else {
       chartSection.style.display = "none";
       toggleBtn.textContent = "📈 Toggle Risk-Return Chart";
+      const tooltip = document.getElementById("chart-tooltip");
+      if (tooltip) tooltip.style.display = "none";
     }
   });
+
+  // Horizon Switcher buttons
+  const btn3y = document.getElementById("btn-horizon-3y");
+  const btn1y = document.getElementById("btn-horizon-1y");
+  if (btn3y && btn1y) {
+    btn3y.addEventListener("click", () => {
+      if (state.chartHorizon === "3y") return;
+      state.chartHorizon = "3y";
+      btn3y.classList.add("active");
+      btn1y.classList.remove("active");
+      const labelEl = document.getElementById("chart-y-axis-label");
+      if (labelEl) labelEl.textContent = "3Y CAGR (%)";
+      if (state.showChart) drawRiskReturnChart();
+    });
+    btn1y.addEventListener("click", () => {
+      if (state.chartHorizon === "1y") return;
+      state.chartHorizon = "1y";
+      btn1y.classList.add("active");
+      btn3y.classList.remove("active");
+      const labelEl = document.getElementById("chart-y-axis-label");
+      if (labelEl) labelEl.textContent = "1Y Return (%)";
+      if (state.showChart) drawRiskReturnChart();
+    });
+  }
+
+  // View Mode Switcher (2D Bubble vs 3D Perspective)
+  const btn2d = document.getElementById("btn-view-2d");
+  const btn3d = document.getElementById("btn-view-3d");
+  const resetCamBtn = document.getElementById("btn-reset-camera");
+  const aumScaleLegend = document.getElementById("chart-aum-scale-legend");
+  const hintOverlay = document.getElementById("chart-hint-overlay");
+  const zSubText = document.getElementById("chart-z-axis-sub");
+
+  if (btn2d && btn3d) {
+    btn2d.addEventListener("click", () => {
+      if (state.chartViewMode === "2d") return;
+      state.chartViewMode = "2d";
+      btn2d.classList.add("active");
+      btn3d.classList.remove("active");
+      if (resetCamBtn) resetCamBtn.style.display = "none";
+      if (aumScaleLegend) aumScaleLegend.style.display = "flex";
+      if (zSubText) zSubText.textContent = "Bubble Size: AUM";
+      if (hintOverlay) {
+        hintOverlay.innerHTML = `<span>💡 Hover bubble for Rank &amp; details &bull; Click to open full scheme analysis</span>`;
+      }
+      if (state.showChart) drawRiskReturnChart();
+    });
+
+    btn3d.addEventListener("click", () => {
+      if (state.chartViewMode === "3d") return;
+      state.chartViewMode = "3d";
+      btn3d.classList.add("active");
+      btn2d.classList.remove("active");
+      if (resetCamBtn) resetCamBtn.style.display = "inline-flex";
+      if (aumScaleLegend) aumScaleLegend.style.display = "none";
+      const dimCfg = THIRD_DIM_CONFIG[state.chartThirdDim] || THIRD_DIM_CONFIG.sharpe_ratio;
+      if (zSubText) zSubText.textContent = `Z-Axis: ${dimCfg.label} | Bubble Size: AUM`;
+      if (hintOverlay) {
+        hintOverlay.innerHTML = `<span>🖱️ Click &amp; drag to rotate 3D view &bull; Scroll to zoom &bull; Hover for 3D stats &bull; Click for scheme</span>`;
+      }
+      if (state.showChart) drawRiskReturnChart();
+    });
+  }
+
+  // 3rd Dimension Selector Dropdown
+  const thirdDimSelect = document.getElementById("select-third-dim");
+  if (thirdDimSelect) {
+    thirdDimSelect.addEventListener("change", (e) => {
+      state.chartThirdDim = e.target.value;
+      const dimCfg = THIRD_DIM_CONFIG[state.chartThirdDim] || THIRD_DIM_CONFIG.sharpe_ratio;
+      if (state.chartViewMode === "3d" && zSubText) {
+        zSubText.textContent = `Z-Axis: ${dimCfg.label} | Bubble Size: AUM`;
+      }
+      if (state.showChart) drawRiskReturnChart();
+    });
+  }
+
+  // Reset 3D Camera button
+  if (resetCamBtn) {
+    resetCamBtn.addEventListener("click", () => {
+      state.camera3D.yaw = -0.65;
+      state.camera3D.pitch = 0.38;
+      state.camera3D.zoom = 1.0;
+      if (state.showChart) drawRiskReturnChart();
+    });
+  }
+
+  // Setup interactive hover/click listeners on the chart
+  setupChartInteractions();
 
   // Day / Night Theme Mode Setup
   initTheme();
@@ -208,6 +362,9 @@ async function loadFundsData() {
     renderCategoryTabs();
     updateCategoryBanner();
     renderTable();
+    if (state.showChart) {
+      drawRiskReturnChart();
+    }
   } catch (err) {
     console.error("Failed to load funds.json:", err);
     document.getElementById("table-body").innerHTML = `
@@ -736,15 +893,249 @@ function closeDrawer() {
   state.selectedFund = null;
 }
 
-// Canvas-based Risk-Return Scatter Plot
+// Dynamic AUM Bubble Radius: Higher AUM is dramatically bigger, lower is smaller
+function calculateBubbleRadius(aum, minAum, maxAum) {
+  const safeAum = Math.max(aum || minAum, 20);
+  const sqrtMin = Math.sqrt(Math.max(minAum, 20));
+  const sqrtMax = Math.sqrt(Math.max(maxAum, 1000));
+  const sqrtVal = Math.sqrt(safeAum);
+  const fraction = Math.max(0, Math.min(1, (sqrtVal - sqrtMin) / (sqrtMax - sqrtMin || 1)));
+
+  // Bubble size extremes: 4.5px for small boutique funds up to 28px for mega funds
+  const minR = 4.5;
+  const maxR = 28;
+  return minR + fraction * (maxR - minR);
+}
+
+// Interactive Canvas-based Risk-Return Scatter Plot (2D & 3D)
+let isChartInteractionsSetup = false;
+
+function setupChartInteractions() {
+  if (isChartInteractionsSetup) return;
+  const canvas = document.getElementById("riskReturnCanvas");
+  const tooltip = document.getElementById("chart-tooltip");
+  const wrapper = document.getElementById("chart-canvas-wrapper");
+  if (!canvas || !tooltip || !wrapper) return;
+
+  isChartInteractionsSetup = true;
+
+  function findPointAt(mouseX, mouseY) {
+    if (!state.chartPoints || state.chartPoints.length === 0) return null;
+    let closest = null;
+    let minDistance = Infinity;
+
+    for (const pt of state.chartPoints) {
+      const px = state.chartViewMode === "3d" ? pt.screenX : pt.x;
+      const py = state.chartViewMode === "3d" ? pt.screenY : pt.y;
+      const pr = state.chartViewMode === "3d" ? pt.projectedR : pt.r;
+
+      const dist = Math.hypot(px - mouseX, py - mouseY);
+      const hitRadius = Math.max(pr + 8, 14);
+
+      if (dist <= hitRadius) {
+        if (state.chartViewMode === "3d") {
+          // In 3D, pick nearest depth (foreground)
+          if (!closest || pt.depth < closest.depth || (Math.abs(pt.depth - closest.depth) < 0.25 && dist < minDistance)) {
+            minDistance = dist;
+            closest = pt;
+          }
+        } else {
+          if (dist < minDistance) {
+            minDistance = dist;
+            closest = pt;
+          }
+        }
+      }
+    }
+    return closest;
+  }
+
+  // Mouse Down for 3D Drag Orbit
+  canvas.addEventListener("mousedown", (e) => {
+    if (state.chartViewMode === "3d") {
+      state.camera3D.isDragging = true;
+      state.camera3D.lastMouseX = e.clientX;
+      state.camera3D.lastMouseY = e.clientY;
+      canvas.style.cursor = "grabbing";
+    }
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (state.camera3D.isDragging) {
+      state.camera3D.isDragging = false;
+      canvas.style.cursor = state.chartHoveredFund ? "pointer" : "default";
+    }
+  });
+
+  canvas.addEventListener("mousemove", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    // Handle 3D Drag Rotation
+    if (state.chartViewMode === "3d" && state.camera3D.isDragging) {
+      const dx = e.clientX - state.camera3D.lastMouseX;
+      const dy = e.clientY - state.camera3D.lastMouseY;
+      state.camera3D.yaw += dx * 0.008;
+      state.camera3D.pitch = Math.max(-1.15, Math.min(1.15, state.camera3D.pitch + dy * 0.008));
+      state.camera3D.lastMouseX = e.clientX;
+      state.camera3D.lastMouseY = e.clientY;
+      drawRiskReturnChart();
+      tooltip.style.display = "none";
+      return;
+    }
+
+    const hit = findPointAt(mouseX, mouseY);
+
+    if (hit) {
+      canvas.style.cursor = state.camera3D.isDragging ? "grabbing" : "pointer";
+      if (!state.chartHoveredFund || state.chartHoveredFund.fund.scheme_code !== hit.fund.scheme_code) {
+        state.chartHoveredFund = hit;
+        drawRiskReturnChart();
+      }
+      updateChartTooltip(hit);
+    } else {
+      canvas.style.cursor = state.camera3D.isDragging ? "grabbing" : "default";
+      if (state.chartHoveredFund !== null) {
+        state.chartHoveredFund = null;
+        drawRiskReturnChart();
+        tooltip.style.display = "none";
+      }
+    }
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    if (state.chartHoveredFund !== null) {
+      state.chartHoveredFund = null;
+      canvas.style.cursor = "default";
+      drawRiskReturnChart();
+      tooltip.style.display = "none";
+    }
+  });
+
+  // Wheel Zoom in 3D
+  canvas.addEventListener("wheel", (e) => {
+    if (state.chartViewMode === "3d") {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.08 : 0.92;
+      state.camera3D.zoom = Math.max(0.65, Math.min(2.4, state.camera3D.zoom * factor));
+      drawRiskReturnChart();
+    }
+  }, { passive: false });
+
+  // Bubble Click -> Open Detail Drawer
+  canvas.addEventListener("click", (e) => {
+    if (state.camera3D.isDragging) return;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const hit = findPointAt(mouseX, mouseY);
+    if (hit && hit.fund && hit.fund.scheme_code) {
+      openFundDrawer(hit.fund.scheme_code);
+    }
+  });
+}
+
+function updateChartTooltip(pt) {
+  const tooltip = document.getElementById("chart-tooltip");
+  const wrapper = document.getElementById("chart-canvas-wrapper");
+  if (!tooltip || !wrapper || !pt || !pt.fund) return;
+
+  const fund = pt.fund;
+  const horizon = state.chartHorizon || "3y";
+  const horizonLabel = horizon === "1y" ? "1-Year Return" : "3-Year CAGR";
+  const retVal = horizon === "1y" ? fund.return_1y : fund.return_3y_cagr;
+  const isPos = retVal !== null && retVal >= 0;
+
+  const dimCfg = THIRD_DIM_CONFIG[state.chartThirdDim] || THIRD_DIM_CONFIG.sharpe_ratio;
+  const zFormatted = dimCfg.format(dimCfg.getVal(fund));
+
+  const tier = fund.rating_tier || "Unrated";
+  let tierClass = "below";
+  let rankBadgeClass = "tier-bel";
+  if (tier.includes("BEST")) {
+    tierClass = "best";
+    rankBadgeClass = "tier-best";
+  } else if (tier.includes("Tier 2")) {
+    tierClass = "superior";
+    rankBadgeClass = "tier-sup";
+  } else if (tier.includes("Tier 3")) {
+    tierClass = "average";
+    rankBadgeClass = "tier-avg";
+  }
+
+  tooltip.innerHTML = `
+    <div class="chart-tooltip-header">
+      <div class="chart-tooltip-rank-badge ${rankBadgeClass}">#${fund.composite_rank || "—"}</div>
+      <div class="chart-tooltip-titles">
+        <div class="chart-tooltip-name">${escapeHtml(fund.scheme_name)}</div>
+        <div class="chart-tooltip-meta">${escapeHtml(fund.amc || "")} • Code: ${fund.scheme_code}</div>
+      </div>
+    </div>
+    <div class="chart-tooltip-badge-row">
+      <span class="chart-tooltip-tier-pill ${tierClass}">${escapeHtml(tier)}</span>
+      <span class="chart-tooltip-score">Category Rank <strong>#${fund.composite_rank || "—"}</strong> (${fund.composite_score ? fund.composite_score.toFixed(1) : "N/A"}/100)</span>
+    </div>
+    <div class="chart-tooltip-metrics-grid">
+      <div class="tooltip-metric-box">
+        <span class="metric-box-label">${horizonLabel}</span>
+        <span class="metric-box-val ${isPos ? "val-pos" : "val-neg"}">${formatPercent(retVal)}</span>
+      </div>
+      <div class="tooltip-metric-box">
+        <span class="metric-box-label">Volatility (&sigma;)</span>
+        <span class="metric-box-val">${fund.standard_deviation !== null ? fund.standard_deviation.toFixed(2) + "%" : "N/A"}</span>
+      </div>
+      <div class="tooltip-metric-box">
+        <span class="metric-box-label">Z-Dim (${dimCfg.shortLabel})</span>
+        <span class="metric-box-val" style="color: #38bdf8;">${zFormatted}</span>
+      </div>
+      <div class="tooltip-metric-box">
+        <span class="metric-box-label">Live AUM (Size)</span>
+        <span class="metric-box-val">₹${fund.aum_cr ? Math.round(fund.aum_cr).toLocaleString() : "N/A"} Cr</span>
+      </div>
+    </div>
+    <div class="chart-tooltip-footer">
+      <span>👆 Click bubble to open full scheme analysis</span>
+    </div>
+  `;
+
+  tooltip.style.display = "block";
+
+  const wrapperRect = wrapper.getBoundingClientRect();
+  const ttWidth = tooltip.offsetWidth || 310;
+  const ttHeight = tooltip.offsetHeight || 160;
+
+  const posX = state.chartViewMode === "3d" ? pt.screenX : pt.x;
+  const posY = state.chartViewMode === "3d" ? pt.screenY : pt.y;
+  const posR = state.chartViewMode === "3d" ? pt.projectedR : pt.r;
+
+  let left = posX + posR + 14;
+  if (left + ttWidth > wrapperRect.width - 12) {
+    left = posX - posR - ttWidth - 14;
+  }
+  if (left < 10) left = 10;
+
+  let top = posY - ttHeight / 2;
+  if (top + ttHeight > wrapperRect.height - 10) {
+    top = wrapperRect.height - ttHeight - 10;
+  }
+  if (top < 10) top = 10;
+
+  tooltip.style.left = `${Math.round(left)}px`;
+  tooltip.style.top = `${Math.round(top)}px`;
+}
+
 function drawRiskReturnChart() {
   const canvas = document.getElementById("riskReturnCanvas");
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
 
-  // Handle Retina HiDPI displays
+  setupChartInteractions();
+
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return;
+
   canvas.width = rect.width * dpr;
   canvas.height = rect.height * dpr;
   ctx.scale(dpr, dpr);
@@ -754,49 +1145,112 @@ function drawRiskReturnChart() {
 
   ctx.clearRect(0, 0, width, height);
 
-  // Filter funds with valid 3Y CAGR and Volatility
+  const horizon = state.chartHorizon || "3y";
+
+  // Filter category funds with valid metrics
   const categoryFunds = state.rawFunds.filter((f) => {
     if (f.category !== state.activeCategory) return false;
-    return f.standard_deviation !== null && f.return_3y_cagr !== null;
+    if (f.standard_deviation === null || f.standard_deviation === undefined) return false;
+    const ret = horizon === "1y" ? f.return_1y : f.return_3y_cagr;
+    return ret !== null && ret !== undefined;
   });
 
+  const countBadge = document.getElementById("chart-plotted-count");
+  if (countBadge) {
+    countBadge.textContent = `${categoryFunds.length} schemes plotted`;
+  }
+
   if (categoryFunds.length === 0) {
+    state.chartPoints = [];
     ctx.fillStyle = "#94a3b8";
-    ctx.font = "14px Plus Jakarta Sans";
+    ctx.font = "14px 'Plus Jakarta Sans', sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("No 3-year performance data available for this category", width / 2, height / 2);
+    ctx.fillText(`No ${horizon.toUpperCase()} performance data available for this category`, width / 2, height / 2);
     return;
   }
 
-  // Find min/max ranges
+  const isLight = document.documentElement.getAttribute("data-theme") === "light";
+
+  if (state.chartViewMode === "3d") {
+    draw3DChart(canvas, ctx, categoryFunds, horizon, width, height, isLight);
+  } else {
+    draw2DChart(canvas, ctx, categoryFunds, horizon, width, height, isLight);
+  }
+}
+
+// 2D Bubble Scatter Plot with Enhanced AUM Extremes
+function draw2DChart(canvas, ctx, categoryFunds, horizon, width, height, isLight) {
   let minVol = Infinity, maxVol = -Infinity;
   let minRet = Infinity, maxRet = -Infinity;
+  let minAum = Infinity, maxAum = -Infinity;
 
   categoryFunds.forEach((f) => {
-    if (f.standard_deviation < minVol) minVol = f.standard_deviation;
-    if (f.standard_deviation > maxVol) maxVol = f.standard_deviation;
-    if (f.return_3y_cagr < minRet) minRet = f.return_3y_cagr;
-    if (f.return_3y_cagr > maxRet) maxRet = f.return_3y_cagr;
+    const vol = f.standard_deviation;
+    const ret = horizon === "1y" ? f.return_1y : f.return_3y_cagr;
+    const aum = f.aum_cr || 100;
+    if (vol < minVol) minVol = vol;
+    if (vol > maxVol) maxVol = vol;
+    if (ret < minRet) minRet = ret;
+    if (ret > maxRet) maxRet = ret;
+    if (aum < minAum) minAum = aum;
+    if (aum > maxAum) maxAum = aum;
   });
 
-  // Pad margins
   minVol = Math.max(0, Math.floor(minVol - 1));
   maxVol = Math.ceil(maxVol + 2);
   minRet = Math.floor(minRet - 2);
   maxRet = Math.ceil(maxRet + 2);
 
-  const padding = { top: 30, right: 40, bottom: 45, left: 60 };
+  if (maxVol <= minVol) maxVol = minVol + 5;
+  if (maxRet <= minRet) maxRet = minRet + 5;
+
+  const padding = { top: 35, right: 40, bottom: 50, left: 65 };
   const plotW = width - padding.left - padding.right;
   const plotH = height - padding.top - padding.bottom;
 
-  // Theme-aware colors
-  const isLight = document.documentElement.getAttribute("data-theme") === "light";
+  // Calculate Median Volatility & Return for quadrant lines
+  const volValues = categoryFunds.map((f) => f.standard_deviation).sort((a, b) => a - b);
+  const retValues = categoryFunds
+    .map((f) => (horizon === "1y" ? f.return_1y : f.return_3y_cagr))
+    .sort((a, b) => a - b);
+  const medVol = volValues[Math.floor(volValues.length / 2)];
+  const medRet = retValues[Math.floor(retValues.length / 2)];
 
-  // Draw Grid lines
-  ctx.strokeStyle = isLight ? "rgba(15, 23, 42, 0.08)" : "rgba(255, 255, 255, 0.06)";
+  const medX = padding.left + ((medVol - minVol) / (maxVol - minVol)) * plotW;
+  const medY = padding.top + plotH - ((medRet - minRet) / (maxRet - minRet)) * plotH;
+
+  // Subtle Quadrant Shading & Divider Lines
+  ctx.save();
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = isLight ? "rgba(15, 23, 42, 0.12)" : "rgba(255, 255, 255, 0.10)";
   ctx.lineWidth = 1;
-  ctx.fillStyle = isLight ? "#475569" : "#64748b";
-  ctx.font = "11px JetBrains Mono";
+
+  if (medX >= padding.left && medX <= width - padding.right) {
+    ctx.beginPath();
+    ctx.moveTo(medX, padding.top);
+    ctx.lineTo(medX, height - padding.bottom);
+    ctx.stroke();
+  }
+
+  if (medY >= padding.top && medY <= height - padding.bottom) {
+    ctx.beginPath();
+    ctx.moveTo(padding.left, medY);
+    ctx.lineTo(width - padding.right, medY);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Quadrant Annotation
+  ctx.fillStyle = isLight ? "rgba(16, 185, 129, 0.55)" : "rgba(52, 211, 153, 0.4)";
+  ctx.font = "600 11px 'Plus Jakarta Sans', sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText("✨ Optimal Zone (High Return, Lower Volatility)", padding.left + 12, padding.top + 18);
+
+  // Grid lines
+  ctx.strokeStyle = isLight ? "rgba(15, 23, 42, 0.07)" : "rgba(255, 255, 255, 0.05)";
+  ctx.lineWidth = 1;
+  ctx.fillStyle = isLight ? "#64748b" : "#64748b";
+  ctx.font = "11px 'JetBrains Mono', monospace";
   ctx.textAlign = "right";
 
   // Y-axis grid
@@ -808,7 +1262,7 @@ function drawRiskReturnChart() {
     ctx.moveTo(padding.left, y);
     ctx.lineTo(width - padding.right, y);
     ctx.stroke();
-    ctx.fillText(`${val.toFixed(1)}%`, padding.left - 10, y + 4);
+    ctx.fillText(`${val > 0 ? "+" : ""}${val.toFixed(1)}%`, padding.left - 10, y + 4);
   }
 
   // X-axis grid
@@ -826,51 +1280,453 @@ function drawRiskReturnChart() {
 
   // Axis Labels
   ctx.fillStyle = isLight ? "#1e293b" : "#94a3b8";
-  ctx.font = "12px Plus Jakarta Sans";
+  ctx.font = "600 12px 'Plus Jakarta Sans', sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("Annualized Volatility / Standard Deviation (σ)", padding.left + plotW / 2, height - 10);
+  ctx.fillText("Annualized Volatility / Standard Deviation (σ) → Higher Risk", padding.left + plotW / 2, height - 12);
 
   ctx.save();
-  ctx.translate(16, padding.top + plotH / 2);
+  ctx.translate(18, padding.top + plotH / 2);
   ctx.rotate(-Math.PI / 2);
-  ctx.fillText("3-Year CAGR Return (%)", 0, 0);
+  const yAxisTitle = horizon === "1y" ? "1-Year Return (%) → Higher Reward" : "3-Year CAGR Return (%) → Higher Reward";
+  ctx.fillText(yAxisTitle, 0, 0);
   ctx.restore();
 
-  // Draw Fund Bubbles
+  // Compute point positions with dynamic AUM radius scaling
+  const newPoints = [];
   categoryFunds.forEach((f) => {
-    const x = padding.left + ((f.standard_deviation - minVol) / (maxVol - minVol)) * plotW;
-    const y = padding.top + plotH - ((f.return_3y_cagr - minRet) / (maxRet - minRet)) * plotH;
+    const vol = f.standard_deviation;
+    const ret = horizon === "1y" ? f.return_1y : f.return_3y_cagr;
+    const x = padding.left + ((vol - minVol) / (maxVol - minVol)) * plotW;
+    const y = padding.top + plotH - ((ret - minRet) / (maxRet - minRet)) * plotH;
 
-    // Radius scaled by AUM
-    const aum = f.aum_cr || 1000;
-    const r = Math.min(Math.max(Math.sqrt(aum) / 25, 5), 18);
+    // Enhanced AUM scaling: 4.5px to 28px
+    const r = calculateBubbleRadius(f.aum_cr, minAum, maxAum);
 
-    // Color by Tier
     let color = "#64748b";
     const tier = f.rating_tier || "";
     if (tier.includes("BEST")) color = "#10b981";
     else if (tier.includes("Tier 2")) color = "#3b82f6";
     else if (tier.includes("Tier 3")) color = "#f59e0b";
 
+    newPoints.push({
+      fund: f,
+      x,
+      y,
+      r,
+      color,
+      vol,
+      ret,
+      tier,
+      rank: f.composite_rank,
+    });
+  });
+
+  state.chartPoints = newPoints;
+
+  // Check hover
+  let hoveredPt = null;
+  if (state.chartHoveredFund) {
+    hoveredPt = state.chartPoints.find((p) => p.fund.scheme_code === state.chartHoveredFund.fund.scheme_code);
+    if (!hoveredPt) {
+      state.chartHoveredFund = null;
+      const tooltip = document.getElementById("chart-tooltip");
+      if (tooltip) tooltip.style.display = "none";
+    }
+  }
+
+  const hasSearch = !!state.searchTerm;
+
+  // CRITICAL: Sort by radius descending so larger bubbles are drawn in background, smaller bubbles on top!
+  const sortedToDraw = [...state.chartPoints].sort((a, b) => b.r - a.r);
+
+  // Draw Bubbles (Non-hovered first)
+  sortedToDraw.forEach((p) => {
+    if (hoveredPt && p.fund.scheme_code === hoveredPt.fund.scheme_code) return;
+
+    let isMatch = true;
+    if (hasSearch) {
+      const name = (p.fund.scheme_name || "").toLowerCase();
+      const amc = (p.fund.amc || "").toLowerCase();
+      isMatch = name.includes(state.searchTerm) || amc.includes(state.searchTerm);
+    }
+
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.globalAlpha = 0.65;
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+
+    let alpha = 0.68;
+    if (hoveredPt) {
+      alpha = 0.22;
+    } else if (hasSearch) {
+      alpha = isMatch ? 0.92 : 0.12;
+    }
+
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = alpha;
     ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = "#ffffff";
-    ctx.globalAlpha = 0.9;
+
+    ctx.lineWidth = isMatch && hasSearch ? 2.5 : (p.r > 15 ? 2.0 : 1.2);
+    ctx.strokeStyle = isMatch && hasSearch ? "#38bdf8" : "#ffffff";
+    ctx.globalAlpha = hoveredPt ? 0.35 : (hasSearch ? (isMatch ? 1.0 : 0.2) : 0.88);
     ctx.stroke();
     ctx.globalAlpha = 1.0;
 
-    // Label for top 3
-    if (f.composite_rank && f.composite_rank <= 3) {
+    // Rank label in bubble if bubble is large enough (>= 9px)
+    if ((!hoveredPt || isMatch) && p.rank && p.rank <= 3 && p.r >= 9) {
       ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 10px Plus Jakarta Sans";
+      ctx.font = "bold 10px 'Plus Jakarta Sans', sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(`#${f.composite_rank}`, x, y + 3);
+      ctx.fillText(`#${p.rank}`, p.x, p.y + 3.5);
     }
   });
+
+  // Highlight Hovered Fund in 2D
+  if (hoveredPt) {
+    ctx.save();
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = hoveredPt.color;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.85;
+
+    ctx.beginPath();
+    ctx.moveTo(hoveredPt.x, hoveredPt.y);
+    ctx.lineTo(hoveredPt.x, height - padding.bottom);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(hoveredPt.x, hoveredPt.y);
+    ctx.lineTo(padding.left, hoveredPt.y);
+    ctx.stroke();
+    ctx.restore();
+
+    // Axis coordinate callout badges
+    const xBadgeText = `${hoveredPt.vol.toFixed(2)}% σ`;
+    ctx.font = "bold 10.5px 'JetBrains Mono', monospace";
+    const xBadgeW = ctx.measureText(xBadgeText).width + 12;
+    ctx.fillStyle = isLight ? "#0f172a" : "#1e293b";
+    ctx.beginPath();
+    ctx.roundRect(hoveredPt.x - xBadgeW / 2, height - padding.bottom + 4, xBadgeW, 18, 4);
+    ctx.fill();
+    ctx.strokeStyle = hoveredPt.color;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.fillText(xBadgeText, hoveredPt.x, height - padding.bottom + 17);
+
+    const yBadgeText = `${hoveredPt.ret > 0 ? "+" : ""}${hoveredPt.ret.toFixed(2)}%`;
+    const yBadgeW = ctx.measureText(yBadgeText).width + 12;
+    ctx.fillStyle = isLight ? "#0f172a" : "#1e293b";
+    ctx.beginPath();
+    ctx.roundRect(padding.left - yBadgeW - 6, hoveredPt.y - 9, yBadgeW, 18, 4);
+    ctx.fill();
+    ctx.strokeStyle = hoveredPt.color;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.fillText(yBadgeText, padding.left - yBadgeW / 2 - 6, hoveredPt.y + 4);
+
+    // Outer Halo
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(hoveredPt.x, hoveredPt.y, hoveredPt.r + 8, 0, Math.PI * 2);
+    ctx.fillStyle = hoveredPt.color;
+    ctx.globalAlpha = 0.25;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(hoveredPt.x, hoveredPt.y, hoveredPt.r + 4, 0, Math.PI * 2);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2.5;
+    ctx.globalAlpha = 0.95;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(hoveredPt.x, hoveredPt.y, hoveredPt.r + 1, 0, Math.PI * 2);
+    ctx.fillStyle = hoveredPt.color;
+    ctx.globalAlpha = 1.0;
+    ctx.fill();
+    ctx.restore();
+
+    if (hoveredPt.r >= 8) {
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 11px 'Plus Jakarta Sans', sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`#${hoveredPt.rank || ""}`, hoveredPt.x, hoveredPt.y + 4);
+    }
+  }
+}
+
+// 3D Perspective Orbit Scatter Plot
+function draw3DChart(canvas, ctx, categoryFunds, horizon, width, height, isLight) {
+  const dimCfg = THIRD_DIM_CONFIG[state.chartThirdDim] || THIRD_DIM_CONFIG.sharpe_ratio;
+
+  let minVol = Infinity, maxVol = -Infinity;
+  let minRet = Infinity, maxRet = -Infinity;
+  let minZ = Infinity, maxZ = -Infinity;
+  let minAum = Infinity, maxAum = -Infinity;
+
+  categoryFunds.forEach((f) => {
+    const vol = f.standard_deviation;
+    const ret = horizon === "1y" ? f.return_1y : f.return_3y_cagr;
+    const zVal = dimCfg.getVal(f);
+    const aum = f.aum_cr || 100;
+
+    if (vol < minVol) minVol = vol;
+    if (vol > maxVol) maxVol = vol;
+    if (ret < minRet) minRet = ret;
+    if (ret > maxRet) maxRet = ret;
+    if (zVal !== null && zVal !== undefined) {
+      const numZ = Number(zVal);
+      if (numZ < minZ) minZ = numZ;
+      if (numZ > maxZ) maxZ = numZ;
+    }
+    if (aum < minAum) minAum = aum;
+    if (aum > maxAum) maxAum = aum;
+  });
+
+  if (minZ === Infinity || maxZ === -Infinity) { minZ = 0; maxZ = 1; }
+  if (minVol === maxVol) maxVol = minVol + 5;
+  if (minRet === maxRet) maxRet = minRet + 5;
+  if (minZ === maxZ) maxZ = minZ + 1;
+
+  minVol = Math.max(0, minVol - 1);
+  maxVol += 1.5;
+  minRet -= 1.5;
+  maxRet += 1.5;
+  minZ -= (maxZ - minZ) * 0.08;
+  maxZ += (maxZ - minZ) * 0.08;
+
+  // 3D Projection function
+  function project(x, y, z) {
+    const cosY = Math.cos(state.camera3D.yaw);
+    const sinY = Math.sin(state.camera3D.yaw);
+    const cosP = Math.cos(state.camera3D.pitch);
+    const sinP = Math.sin(state.camera3D.pitch);
+
+    const x1 = x * cosY + z * sinY;
+    const z1 = -x * sinY + z * cosY;
+
+    const y2 = y * cosP - z1 * sinP;
+    const z2 = y * sinP + z1 * cosP;
+
+    const fov = 3.6 / state.camera3D.zoom;
+    const camZ = z2 + fov;
+    const perspective = fov / Math.max(camZ, 0.2);
+
+    const scale = Math.min(width, height) * 0.38;
+    const screenX = width / 2 + x1 * scale * perspective;
+    const screenY = height / 2 - y2 * scale * perspective;
+
+    return { screenX, screenY, depth: camZ, perspective };
+  }
+
+  // Draw 3D Floor Grid at Y = -1
+  ctx.save();
+  ctx.strokeStyle = isLight ? "rgba(15, 23, 42, 0.12)" : "rgba(255, 255, 255, 0.12)";
+  ctx.lineWidth = 1;
+  const gridSteps = 4;
+
+  for (let i = 0; i <= gridSteps; i++) {
+    const t = -1 + (2 / gridSteps) * i;
+    const pA = project(t, -1, -1);
+    const pB = project(t, -1, 1);
+    ctx.beginPath();
+    ctx.moveTo(pA.screenX, pA.screenY);
+    ctx.lineTo(pB.screenX, pB.screenY);
+    ctx.stroke();
+
+    const pC = project(-1, -1, t);
+    const pD = project(1, -1, t);
+    ctx.beginPath();
+    ctx.moveTo(pC.screenX, pC.screenY);
+    ctx.lineTo(pD.screenX, pD.screenY);
+    ctx.stroke();
+  }
+
+  // 3D Axes
+  ctx.strokeStyle = isLight ? "rgba(15, 23, 42, 0.3)" : "rgba(255, 255, 255, 0.3)";
+  ctx.lineWidth = 1.5;
+
+  const axX0 = project(-1, -1, -1);
+  const axX1 = project(1, -1, -1);
+  ctx.beginPath();
+  ctx.moveTo(axX0.screenX, axX0.screenY);
+  ctx.lineTo(axX1.screenX, axX1.screenY);
+  ctx.stroke();
+
+  const axY0 = project(-1, -1, -1);
+  const axY1 = project(-1, 1, -1);
+  ctx.beginPath();
+  ctx.moveTo(axY0.screenX, axY0.screenY);
+  ctx.lineTo(axY1.screenX, axY1.screenY);
+  ctx.stroke();
+
+  const axZ0 = project(-1, -1, -1);
+  const axZ1 = project(-1, -1, 1);
+  ctx.beginPath();
+  ctx.moveTo(axZ0.screenX, axZ0.screenY);
+  ctx.lineTo(axZ1.screenX, axZ1.screenY);
+  ctx.stroke();
+
+  // 3D Axis Labels
+  ctx.font = "bold 11px 'Plus Jakarta Sans', sans-serif";
+  ctx.fillStyle = isLight ? "#1e293b" : "#94a3b8";
+
+  const lblX = project(1.15, -1, -1);
+  ctx.textAlign = "left";
+  ctx.fillText("Volatility (σ) →", lblX.screenX, lblX.screenY);
+
+  const lblY = project(-1, 1.15, -1);
+  ctx.textAlign = "center";
+  ctx.fillText(horizon === "1y" ? "1Y Return (%) ↑" : "3Y CAGR (%) ↑", lblY.screenX, lblY.screenY - 4);
+
+  const lblZ = project(-1, -1, 1.18);
+  ctx.textAlign = "right";
+  ctx.fillText(`3rd Dim: ${dimCfg.shortLabel} ↗`, lblZ.screenX, lblZ.screenY);
+  ctx.restore();
+
+  // Project all funds into 3D
+  const points3D = [];
+  categoryFunds.forEach((f) => {
+    const vol = f.standard_deviation;
+    const ret = horizon === "1y" ? f.return_1y : f.return_3y_cagr;
+    let zVal = dimCfg.getVal(f);
+    if (zVal === null || zVal === undefined) zVal = (minZ + maxZ) / 2;
+
+    const normX = ((vol - minVol) / (maxVol - minVol)) * 2 - 1;
+    const normY = ((ret - minRet) / (maxRet - minRet)) * 2 - 1;
+    const normZ = ((zVal - minZ) / (maxZ - minZ)) * 2 - 1;
+
+    const baseR = calculateBubbleRadius(f.aum_cr, minAum, maxAum);
+    const proj = project(normX, normY, normZ);
+    const floorProj = project(normX, -1, normZ);
+
+    let color = "#64748b";
+    const tier = f.rating_tier || "";
+    if (tier.includes("BEST")) color = "#10b981";
+    else if (tier.includes("Tier 2")) color = "#3b82f6";
+    else if (tier.includes("Tier 3")) color = "#f59e0b";
+
+    points3D.push({
+      fund: f,
+      normX,
+      normY,
+      normZ,
+      vol,
+      ret,
+      zVal,
+      screenX: proj.screenX,
+      screenY: proj.screenY,
+      depth: proj.depth,
+      projectedR: Math.max(3.5, baseR * proj.perspective),
+      baseR,
+      floorX: floorProj.screenX,
+      floorY: floorProj.screenY,
+      color,
+      tier,
+      rank: f.composite_rank,
+    });
+  });
+
+  state.chartPoints = points3D;
+
+  let hoveredPt = null;
+  if (state.chartHoveredFund) {
+    hoveredPt = state.chartPoints.find((p) => p.fund.scheme_code === state.chartHoveredFund.fund.scheme_code);
+    if (!hoveredPt) {
+      state.chartHoveredFund = null;
+      const tooltip = document.getElementById("chart-tooltip");
+      if (tooltip) tooltip.style.display = "none";
+    }
+  }
+
+  // Painter's Algorithm: render from farthest to nearest
+  const renderList = [...points3D].sort((a, b) => b.depth - a.depth);
+  const hasSearch = !!state.searchTerm;
+
+  renderList.forEach((p) => {
+    const isHovered = hoveredPt && p.fund.scheme_code === hoveredPt.fund.scheme_code;
+
+    let isMatch = true;
+    if (hasSearch) {
+      const name = (p.fund.scheme_name || "").toLowerCase();
+      const amc = (p.fund.amc || "").toLowerCase();
+      isMatch = name.includes(state.searchTerm) || amc.includes(state.searchTerm);
+    }
+
+    // Drop line to floor
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(p.screenX, p.screenY);
+    ctx.lineTo(p.floorX, p.floorY);
+    ctx.strokeStyle = isHovered ? p.color : (isLight ? "rgba(15, 23, 42, 0.15)" : "rgba(255, 255, 255, 0.15)");
+    ctx.setLineDash(isHovered ? [2, 2] : [1, 3]);
+    ctx.lineWidth = isHovered ? 1.5 : 1;
+    ctx.stroke();
+
+    // Floor shadow disc
+    ctx.beginPath();
+    ctx.ellipse(p.floorX, p.floorY, p.projectedR * 0.7, p.projectedR * 0.35, 0, 0, Math.PI * 2);
+    ctx.fillStyle = isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(0, 0, 0, 0.35)";
+    ctx.fill();
+    ctx.restore();
+
+    // 3D Sphere / Orb with radial specular highlight
+    ctx.save();
+    ctx.beginPath();
+    const drawR = isHovered ? p.projectedR + 3 : p.projectedR;
+    ctx.arc(p.screenX, p.screenY, drawR, 0, Math.PI * 2);
+
+    const grad = ctx.createRadialGradient(
+      p.screenX - drawR * 0.35,
+      p.screenY - drawR * 0.35,
+      drawR * 0.1,
+      p.screenX,
+      p.screenY,
+      drawR
+    );
+    grad.addColorStop(0, "#ffffff");
+    grad.addColorStop(0.3, p.color);
+    grad.addColorStop(1, isLight ? "#0f172a" : "#020617");
+
+    let alpha = 0.85;
+    if (hoveredPt && !isHovered) alpha = 0.22;
+    else if (hasSearch && !isMatch) alpha = 0.12;
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.lineWidth = isHovered ? 2.5 : 1.2;
+    ctx.strokeStyle = isHovered ? "#ffffff" : (isMatch && hasSearch ? "#38bdf8" : "rgba(255, 255, 255, 0.7)");
+    ctx.stroke();
+    ctx.restore();
+
+    if ((!hoveredPt || isHovered || isMatch) && p.rank && p.rank <= 3 && p.projectedR >= 8) {
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 10px 'Plus Jakarta Sans', sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`#${p.rank}`, p.screenX, p.screenY + 3.5);
+    }
+  });
+
+  // 3D Hover highlight
+  if (hoveredPt) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(hoveredPt.screenX, hoveredPt.screenY, hoveredPt.projectedR + 8, 0, Math.PI * 2);
+    ctx.fillStyle = hoveredPt.color;
+    ctx.globalAlpha = 0.3;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(hoveredPt.screenX, hoveredPt.screenY, hoveredPt.projectedR + 4, 0, Math.PI * 2);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 // Utility Helpers
